@@ -1,0 +1,14 @@
+## Interface: 120001
+## Title: DISCONTENT
+## Notes: Gildeninternes Addon für DISCONTENT
+## Author: Steffen
+## Version: 0.3
+## SavedVariables: DISCONTENTDB
+
+DISCONTENT.lua
+DISCONTENT_News.lua
+DISCONTENT_GuildNews.lua
+DISCONTENT_Overview.lua
+DISCONTENT_GuildChat.lua
+DISCONTENT_Professions.lua
+DISCONTENT_Settings.lua
