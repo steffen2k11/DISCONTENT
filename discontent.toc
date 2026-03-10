@@ -12,3 +12,4 @@ DISCONTENT_Overview.lua
 DISCONTENT_GuildChat.lua
 DISCONTENT_Professions.lua
 DISCONTENT_Settings.lua
+DISCONTENT_gear.lua

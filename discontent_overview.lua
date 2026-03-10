@@ -76,6 +76,25 @@ function DISCONTENT:CreateOnlineOnlyCheckbox()
     self.onlineOnlyCheck = check
 end
 
+function DISCONTENT:GetAddonStatusInfo(member)
+    if not member then
+        return 0.5, 0.5, 0.5, "Addon unbekannt"
+    end
+
+    local key = self:GetCharacterKey(member.name, member.realm)
+    local info = self.addonUsers and self.addonUsers[key]
+
+    if not info then
+        return 0.45, 0.45, 0.45, "Addon nicht erkannt"
+    end
+
+    if info.version and info.version ~= self.addonVersion then
+        return 1.0, 0.82, 0.0, "Addon erkannt - andere Version: " .. tostring(info.version)
+    end
+
+    return 0.2, 1.0, 0.2, "Addon erkannt - Version " .. tostring(info.version or "?")
+end
+
 function DISCONTENT:CreateOverviewUI()
     self.filterLabel = self.overviewTabContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.filterLabel:SetText("Rang:")
@@ -129,20 +148,26 @@ function DISCONTENT:CreateOverviewUI()
     )
 
     self.classHeaderButton = self:CreateHeaderButton(
-        self.overviewTabContent, "Klasse", 100,
+        self.overviewTabContent, "Klasse", 90,
         "TOPLEFT", self.overviewTabContent, "TOPLEFT", 600, -52,
         "class"
     )
 
+    self.ilvlHeaderButton = self:CreateHeaderButton(
+        self.overviewTabContent, "iLvl", 55,
+        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 700, -52,
+        "ilvl"
+    )
+
     self.zoneHeaderButton = self:CreateHeaderButton(
-        self.overviewTabContent, "Gebiet", 180,
-        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 710, -52,
+        self.overviewTabContent, "Gebiet", 160,
+        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 770, -52,
         "zone"
     )
 
     self.statusHeaderButton = self:CreateHeaderButton(
         self.overviewTabContent, "Status", 70,
-        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 900, -52,
+        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 950, -52,
         "status"
     )
 
@@ -152,6 +177,7 @@ function DISCONTENT:CreateOverviewUI()
         self.rankHeaderButton,
         self.levelHeaderButton,
         self.classHeaderButton,
+        self.ilvlHeaderButton,
         self.zoneHeaderButton,
         self.statusHeaderButton,
     }
@@ -190,6 +216,11 @@ function DISCONTENT:EnsureRowCount()
             row.bg:SetAllPoints()
             row.bg:SetColorTexture(1, 1, 1, 0.04)
         end
+
+        row.addonStatus = row:CreateTexture(nil, "OVERLAY")
+        row.addonStatus:SetSize(8, 8)
+        row.addonStatus:SetTexture("Interface\\Buttons\\WHITE8X8")
+        row.addonStatus:SetColorTexture(0.4, 0.4, 0.4, 1)
 
         row.nameButton = CreateFrame("Button", nil, row)
         row.nameButton:SetNormalFontObject("GameFontNormal")
@@ -260,6 +291,9 @@ function DISCONTENT:EnsureRowCount()
         row.classText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         row.classText:SetJustifyH("LEFT")
 
+        row.ilvlText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        row.ilvlText:SetJustifyH("LEFT")
+
         row.zoneText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         row.zoneText:SetJustifyH("LEFT")
 
@@ -287,6 +321,10 @@ function DISCONTENT:UpdateRows()
         row:SetPoint("TOPLEFT", self.overviewTabContent, "TOPLEFT", layout.leftMargin, -106 - ((i - 1) * self.rowHeight))
         row:SetWidth(layout.rowWidth)
         row:SetHeight(self.rowHeight)
+
+        row.addonStatus:ClearAllPoints()
+        row.addonStatus:SetPoint("LEFT", row, "LEFT", layout.addonStatusX + 4, 0)
+        row.addonStatus:SetSize(8, 8)
 
         row.nameButton:ClearAllPoints()
         row.nameButton:SetPoint("LEFT", row, "LEFT", layout.nameX, 0)
@@ -320,6 +358,10 @@ function DISCONTENT:UpdateRows()
         row.classText:SetPoint("LEFT", row, "LEFT", layout.classX, 0)
         row.classText:SetWidth(layout.classWidth)
 
+        row.ilvlText:ClearAllPoints()
+        row.ilvlText:SetPoint("LEFT", row, "LEFT", layout.ilvlX, 0)
+        row.ilvlText:SetWidth(layout.ilvlWidth)
+
         row.zoneText:ClearAllPoints()
         row.zoneText:SetPoint("LEFT", row, "LEFT", layout.zoneX, 0)
         row.zoneText:SetWidth(layout.zoneWidth)
@@ -336,10 +378,44 @@ function DISCONTENT:UpdateRows()
                 row.nameButton:GetFontString():SetTextColor(0.85, 0.92, 1)
             end
 
+            local ar, ag, ab, tooltipText = self:GetAddonStatusInfo(member)
+            row.addonStatus:SetColorTexture(ar, ag, ab, 1)
+
+            row:SetScript("OnEnter", function()
+                GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+                GameTooltip:SetText(member.name or "-")
+                GameTooltip:AddLine(tooltipText or "Addon unbekannt", 1, 1, 1, true)
+                GameTooltip:Show()
+            end)
+
+            row:SetScript("OnLeave", function()
+                GameTooltip:Hide()
+            end)
+
             row.serverText:SetText(member.realm)
             row.rankText:SetText(member.rankName)
             row.levelText:SetText(tostring(member.level))
             row.classText:SetText(member.className)
+
+            local key = self:GetCharacterKey(member.name, member.realm)
+            local gearTable = self.gearData or {}
+            local gear = gearTable[key]
+
+            if gear and gear.ilvl then
+                local ilvl = math.floor(tonumber(gear.ilvl) or 0)
+                row.ilvlText:SetText(tostring(ilvl))
+
+                if self.GetGearColor then
+                    local ir, ig, ib = self:GetGearColor(ilvl)
+                    row.ilvlText:SetTextColor(ir, ig, ib)
+                else
+                    row.ilvlText:SetTextColor(1, 1, 1)
+                end
+            else
+                row.ilvlText:SetText("-")
+                row.ilvlText:SetTextColor(0.5, 0.5, 0.5)
+            end
+
             row.zoneText:SetText(member.zone)
             row.statusText:SetText(member.isOnline and "Online" or "Offline")
 
@@ -358,11 +434,14 @@ function DISCONTENT:UpdateRows()
             row.classText:SetTextColor(r, g, b)
 
             row:Show()
+            row.addonStatus:Show()
             row.nameButton:Show()
             row.inviteButton:Show()
             row.whisperButton:Show()
         else
             row.member = nil
+            row:SetScript("OnEnter", nil)
+            row:SetScript("OnLeave", nil)
             row:Hide()
         end
     end
@@ -464,7 +543,7 @@ function DISCONTENT:UpdateOverviewLayout()
     self.separator:SetSize(layout.usableWidth + 1, 1)
 
     self.nameHeader:ClearAllPoints()
-    self.nameHeader:SetPoint("TOPLEFT", self.overviewTabContent, "TOPLEFT", layout.leftMargin, -52)
+    self.nameHeader:SetPoint("TOPLEFT", self.overviewTabContent, "TOPLEFT", layout.leftMargin + layout.nameX, -52)
     self.nameHeader:SetWidth(layout.serverX - layout.nameX - 10)
 
     self.serverHeaderButton:ClearAllPoints()
@@ -482,6 +561,10 @@ function DISCONTENT:UpdateOverviewLayout()
     self.classHeaderButton:ClearAllPoints()
     self.classHeaderButton:SetPoint("TOPLEFT", self.overviewTabContent, "TOPLEFT", layout.leftMargin + layout.classX, -52)
     self.classHeaderButton:SetWidth(layout.classWidth)
+
+    self.ilvlHeaderButton:ClearAllPoints()
+    self.ilvlHeaderButton:SetPoint("TOPLEFT", self.overviewTabContent, "TOPLEFT", layout.leftMargin + layout.ilvlX, -52)
+    self.ilvlHeaderButton:SetWidth(layout.ilvlWidth)
 
     self.zoneHeaderButton:ClearAllPoints()
     self.zoneHeaderButton:SetPoint("TOPLEFT", self.overviewTabContent, "TOPLEFT", layout.leftMargin + layout.zoneX, -52)

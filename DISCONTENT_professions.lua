@@ -7,7 +7,6 @@ local function SplitString(text, delimiter)
         return result
     end
 
-    local pattern = "([^" .. delimiter .. "]*)"
     local start = 1
 
     while true do
@@ -30,6 +29,46 @@ function DISCONTENT:SanitizeCommValue(value)
     value = value:gsub("\n", " ")
     value = value:gsub("\r", " ")
     return value
+end
+
+function DISCONTENT:StoreAddonUser(name, realm, version)
+    if not name or name == "" then
+        return
+    end
+
+    local key = self:GetCharacterKey(name, realm)
+    self.addonUsers[key] = {
+        name = self:SafeName(name),
+        realm = realm or GetRealmName() or "-",
+        version = version or "?",
+        lastSeen = time(),
+    }
+
+    self:SaveSettings()
+
+    if self.uiCreated and self.activeTab == "overview" then
+        self:UpdateRows()
+    end
+end
+
+function DISCONTENT:BroadcastAddonHello()
+    if not IsInGuild() then
+        return
+    end
+
+    local playerName, playerRealm = self:GetPlayerNameRealm()
+    self:StoreAddonUser(playerName, playerRealm, self.addonVersion)
+
+    local payload = table.concat({
+        "HELLO",
+        self:SanitizeCommValue(playerName),
+        self:SanitizeCommValue(playerRealm),
+        self:SanitizeCommValue(self.addonVersion),
+    }, "^")
+
+    if C_ChatInfo and C_ChatInfo.SendAddonMessage then
+        C_ChatInfo.SendAddonMessage(self.professionSyncPrefix, payload, "GUILD")
+    end
 end
 
 function DISCONTENT:GetCurrentProfessionSnapshot()
@@ -158,6 +197,15 @@ function DISCONTENT:HandleProfessionAddonMessage(prefix, message, channel, sende
     local parts = SplitString(message, "^")
     local msgType = parts[1]
 
+    if msgType == "HELLO" then
+        local name = parts[2] or self:SafeName(sender or "")
+        local realm = parts[3] or self:SafeRealm(sender or "")
+        local version = parts[4] or "?"
+
+        self:StoreAddonUser(name, realm, version)
+        return
+    end
+
     if msgType == "PD" then
         local entry = {
             name = parts[2] or "",
@@ -174,6 +222,7 @@ function DISCONTENT:HandleProfessionAddonMessage(prefix, message, channel, sende
         if entry.name and entry.name ~= "" then
             entry.key = self:GetCharacterKey(entry.name, entry.realm)
             self:StoreProfessionEntry(entry)
+            self:StoreAddonUser(entry.name, entry.realm, self.addonVersion)
         end
     end
 end
@@ -412,6 +461,7 @@ function DISCONTENT:CreateProfessionsUI()
     self.professionSendButton:SetSize(170, 24)
     self.professionSendButton:SetText("Eigene Berufe senden")
     self.professionSendButton:SetScript("OnClick", function()
+        DISCONTENT:BroadcastAddonHello()
         DISCONTENT:UpdateOwnProfessionData(true)
     end)
 

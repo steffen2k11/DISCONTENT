@@ -6,6 +6,7 @@ DISCONTENT.members = {}
 DISCONTENT.filteredMembers = {}
 DISCONTENT.guildChatMessages = {}
 DISCONTENT.newsEntries = DISCONTENT.newsEntries or {}
+DISCONTENT.gearData = DISCONTENT.gearData or {}
 
 DISCONTENT.rankFilter = "ALLE"
 DISCONTENT.searchText = ""
@@ -31,6 +32,7 @@ DISCONTENT.pendingBackgroundAlpha = 0.88
 DISCONTENT.activeTab = "guildnews"
 DISCONTENT.maxChatMessages = 80
 
+DISCONTENT.addonVersion = "0.3"
 DISCONTENT.professionSyncPrefix = "DISCPROF"
 DISCONTENT.professions = {}
 DISCONTENT.professionRows = {}
@@ -38,6 +40,7 @@ DISCONTENT.professionVisibleRows = 14
 DISCONTENT.professionRowHeight = 22
 DISCONTENT.professionScrollOffset = 0
 DISCONTENT.professionSearchText = ""
+DISCONTENT.addonUsers = {}
 
 DISCONTENT.CLASS_COLORS = CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS
 
@@ -112,7 +115,17 @@ function DISCONTENT:InitializeDB()
         self.db.professions = {}
     end
 
+    if type(self.db.addonUsers) ~= "table" then
+        self.db.addonUsers = {}
+    end
+
+    if type(self.db.gearData) ~= "table" then
+        self.db.gearData = {}
+    end
+
     self.professions = self.db.professions
+    self.addonUsers = self.db.addonUsers
+    self.gearData = self.db.gearData
     self.pendingScaleValue = self.uiScaleValue
     self.pendingBackgroundAlpha = self.backgroundAlpha
 end
@@ -126,6 +139,8 @@ function DISCONTENT:SaveSettings()
     self.db.uiScaleValue = self.uiScaleValue
     self.db.backgroundAlpha = self.backgroundAlpha
     self.db.professions = self.professions or {}
+    self.db.addonUsers = self.addonUsers or {}
+    self.db.gearData = self.gearData or {}
 end
 
 function DISCONTENT:GetSortedNewsEntries()
@@ -226,23 +241,41 @@ function DISCONTENT:GetLayout()
     local usableWidth = frameWidth - leftMargin - rightMargin
 
     local levelWidth = 45
+    local classWidth = 95
+    local ilvlWidth = 55
     local statusWidth = 70
     local iconAreaWidth = 44
+    local addonStatusWidth = 16
 
     local nameWidth = math.max(120, math.floor(usableWidth * 0.16))
-    local serverWidth = math.max(110, math.floor(usableWidth * 0.14))
-    local rankWidth = math.max(120, math.floor(usableWidth * 0.16))
-    local classWidth = math.max(95, math.floor(usableWidth * 0.12))
-    local zoneWidth = math.max(170, usableWidth - nameWidth - iconAreaWidth - serverWidth - rankWidth - levelWidth - classWidth - statusWidth - 54)
+    local serverWidth = math.max(110, math.floor(usableWidth * 0.13))
+    local rankWidth = math.max(120, math.floor(usableWidth * 0.15))
 
-    local nameX = 4
+    local zoneWidth = math.max(
+        120,
+        usableWidth
+            - addonStatusWidth
+            - nameWidth
+            - iconAreaWidth
+            - serverWidth
+            - rankWidth
+            - levelWidth
+            - classWidth
+            - ilvlWidth
+            - statusWidth
+            - 68
+    )
+
+    local addonStatusX = 4
+    local nameX = addonStatusX + addonStatusWidth + 4
     local icon1X = nameX + nameWidth + 4
     local icon2X = icon1X + 20
     local serverX = icon2X + 22
     local rankX = serverX + serverWidth + 10
     local levelX = rankX + rankWidth + 10
     local classX = levelX + levelWidth + 10
-    local zoneX = classX + classWidth + 10
+    local ilvlX = classX + classWidth + 10
+    local zoneX = ilvlX + ilvlWidth + 10
     local statusX = zoneX + zoneWidth + 10
 
     return {
@@ -250,14 +283,17 @@ function DISCONTENT:GetLayout()
         rightMargin = rightMargin,
         usableWidth = usableWidth,
         rowWidth = usableWidth,
+        addonStatusWidth = addonStatusWidth,
         nameWidth = nameWidth,
         iconAreaWidth = iconAreaWidth,
         serverWidth = serverWidth,
         rankWidth = rankWidth,
         levelWidth = levelWidth,
         classWidth = classWidth,
+        ilvlWidth = ilvlWidth,
         zoneWidth = zoneWidth,
         statusWidth = statusWidth,
+        addonStatusX = addonStatusX,
         nameX = nameX,
         icon1X = icon1X,
         icon2X = icon2X,
@@ -265,6 +301,7 @@ function DISCONTENT:GetLayout()
         rankX = rankX,
         levelX = levelX,
         classX = classX,
+        ilvlX = ilvlX,
         zoneX = zoneX,
         statusX = statusX,
     }
@@ -281,6 +318,11 @@ function DISCONTENT:GetSortValue(member, column)
         return member.level or 0
     elseif column == "class" then
         return self:NormalizeText(member.className)
+    elseif column == "ilvl" then
+        local key = self:GetCharacterKey(member.name, member.realm)
+        local gearTable = self.gearData or {}
+        local gear = gearTable[key]
+        return (gear and tonumber(gear.ilvl)) or 0
     elseif column == "zone" then
         return self:NormalizeText(member.zone)
     elseif column == "status" then
@@ -987,6 +1029,9 @@ DISCONTENT:SetScript("OnEvent", function(self, event, ...)
 
             if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
                 C_ChatInfo.RegisterAddonMessagePrefix(self.professionSyncPrefix)
+                if self.gearPrefix then
+                    C_ChatInfo.RegisterAddonMessagePrefix(self.gearPrefix)
+                end
             end
 
             self:CreateUI()
@@ -1002,8 +1047,16 @@ DISCONTENT:SetScript("OnEvent", function(self, event, ...)
             C_GuildInfo.GuildRoster()
         end
 
-        if self.UpdateOwnProfessionData then
+        if self.BroadcastAddonHello then
             C_Timer.After(2, function()
+                if DISCONTENT.BroadcastAddonHello then
+                    DISCONTENT:BroadcastAddonHello()
+                end
+            end)
+        end
+
+        if self.UpdateOwnProfessionData then
+            C_Timer.After(3, function()
                 if DISCONTENT.UpdateOwnProfessionData then
                     DISCONTENT:UpdateOwnProfessionData(true)
                 end
@@ -1023,8 +1076,13 @@ DISCONTENT:SetScript("OnEvent", function(self, event, ...)
         self:AddGuildChatMessage(author, message, "O")
     elseif event == "CHAT_MSG_ADDON" then
         local prefix, message, channel, sender = ...
+
         if self.HandleProfessionAddonMessage then
             self:HandleProfessionAddonMessage(prefix, message, channel, sender)
+        end
+
+        if self.HandleGearMessage then
+            self:HandleGearMessage(prefix, message, channel, sender)
         end
     elseif event == "SKILL_LINES_CHANGED" then
         if self.UpdateOwnProfessionData then
