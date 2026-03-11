@@ -42,6 +42,40 @@ DISCONTENT.professionScrollOffset = 0
 DISCONTENT.professionSearchText = ""
 DISCONTENT.addonUsers = {}
 
+DISCONTENT.raidPrepEntries = {
+    {
+        category = "Charakter-Sims & Datenpflege",
+        items = {
+            "Aktuelle Sims durchgeführt: Hast du deinen Charakter mit den neuesten Items durch Raidbots (Top Gear / Droptimizer) gejagt?",
+            "WoWaudit Upload: Sind deine aktuellen Daten/Sims bei WoWaudit hochgeladen, damit der Raid-Lead deine Stats und Vorbereitung sehen kann und das Loot-Council eine faire Itemvergabe vornehmen kann?",
+            "Talent-Builds vorbereitet: Hast du die passenden Talent-Strings für die verschiedenen Encounter (Single Target, Add-Cleave, Council) in deinen Vorlagen gespeichert?",
+            "Boss-spezifische Anpassungen: Weißt du, bei welchem Boss du z.B. einen zusätzlichen Stop, Kick oder defensiven Cooldown mitskillen musst?",
+            "Boss-Guides: Hast du dich mit den im Discord bereitgestellten Informationen auf die Raidbosse vorbereitet?",
+        },
+    },
+    {
+        category = "Ausrüstung & Optimierung",
+        items = {
+            "Item Level Maxed: Alle Items maximal aufgewertet, sofern zum aktuellen Zeitpunkt sinnvoll?",
+            "Vollständig Verzaubert: Waffe, Brust, Ringe, Umhang, Armschienen, Stiefel, Hose (höchster Rang) etc..",
+            "Bestmögliche Edelsteine: Alle Sockelplätze mit den korrekten Gems gefüllt.",
+            "Embellishments: Sofern sinnvoll, hast du gecrafted?",
+        },
+    },
+    {
+        category = "Consumables (Verbrauchsgüter)",
+        items = {
+            "Flasks vorhanden",
+            "Buff-Food vorhanden",
+            "Pots vorhanden",
+            "Heiltränke vorhanden",
+            "Waffen-Buffs: Öl, Schleifsteine oder Gewichtsteine für die gesamte Dauer.",
+            "Verstärkungsrunen: Sofern gefordert.",
+            "Vantusrune: Falls für einen speziellen Progress-Boss angefordert.",
+        },
+    },
+}
+
 DISCONTENT.CLASS_COLORS = CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS
 
 function DISCONTENT:SafeName(fullName)
@@ -123,6 +157,22 @@ function DISCONTENT:InitializeDB()
         self.db.gearData = {}
     end
 
+    if type(self.db.raidPrep) ~= "table" then
+        self.db.raidPrep = {}
+    end
+
+    if type(self.db.raidPrep.checked) ~= "table" then
+        self.db.raidPrep.checked = {}
+    end
+
+    if type(self.db.notes) ~= "table" then
+        self.db.notes = {}
+    end
+
+    if type(self.db.notes.items) ~= "table" then
+        self.db.notes.items = {}
+    end
+
     self.professions = self.db.professions
     self.addonUsers = self.db.addonUsers
     self.gearData = self.db.gearData
@@ -141,6 +191,22 @@ function DISCONTENT:SaveSettings()
     self.db.professions = self.professions or {}
     self.db.addonUsers = self.addonUsers or {}
     self.db.gearData = self.gearData or {}
+
+    if type(self.db.raidPrep) ~= "table" then
+        self.db.raidPrep = {}
+    end
+
+    if type(self.db.raidPrep.checked) ~= "table" then
+        self.db.raidPrep.checked = {}
+    end
+
+    if type(self.db.notes) ~= "table" then
+        self.db.notes = {}
+    end
+
+    if type(self.db.notes.items) ~= "table" then
+        self.db.notes.items = {}
+    end
 end
 
 function DISCONTENT:GetSortedNewsEntries()
@@ -221,6 +287,14 @@ function DISCONTENT:ResetWindow()
         if self.UpdateProfessionRows then
             self:UpdateProfessionRows()
         end
+
+        if self.RefreshRaidPrepUI then
+            self:RefreshRaidPrepUI()
+        end
+
+        if self.RefreshNotesUI then
+            self:RefreshNotesUI()
+        end
     end
 end
 
@@ -248,11 +322,11 @@ function DISCONTENT:GetLayout()
     local addonStatusWidth = 16
 
     local nameWidth = math.max(120, math.floor(usableWidth * 0.16))
-    local serverWidth = math.max(110, math.floor(usableWidth * 0.13))
+    local serverWidth = math.max(130, math.floor(usableWidth * 0.16))
     local rankWidth = math.max(120, math.floor(usableWidth * 0.15))
 
     local zoneWidth = math.max(
-        120,
+        110,
         usableWidth
             - addonStatusWidth
             - nameWidth
@@ -263,7 +337,7 @@ function DISCONTENT:GetLayout()
             - classWidth
             - ilvlWidth
             - statusWidth
-            - 68
+            - 72
     )
 
     local addonStatusX = 4
@@ -353,10 +427,10 @@ function DISCONTENT:UpdateHeaderIndicators()
     for _, header in ipairs(self.overviewHeaders) do
         if header and header.arrowText then
             if header.sortKey == self.sortColumn then
-                header.arrowText:SetText(self.sortAscending and "▲" or "▼")
+                header.arrowText:SetText(self.sortAscending and "^" or "v")
                 header.arrowText:SetTextColor(1, 0.82, 0, 1)
             else
-                header.arrowText:SetText("--")
+                header.arrowText:SetText("-")
                 header.arrowText:SetTextColor(0.55, 0.55, 0.55, 1)
             end
         end
@@ -631,6 +705,12 @@ function DISCONTENT:SetActiveTab(tabKey)
     if self.professionsTabContent then
         self.professionsTabContent:Hide()
     end
+    if self.raidPrepTabContent then
+        self.raidPrepTabContent:Hide()
+    end
+    if self.notesTabContent then
+        self.notesTabContent:Hide()
+    end
     if self.settingsTabContent then
         self.settingsTabContent:Hide()
     end
@@ -665,6 +745,22 @@ function DISCONTENT:SetActiveTab(tabKey)
         if self.UpdateProfessionRows then
             self:UpdateProfessionRows()
         end
+    elseif tabKey == "raidprep" then
+        self.raidPrepTabContent:Show()
+        if self.scrollBar then
+            self.scrollBar:Hide()
+        end
+        if self.RefreshRaidPrepUI then
+            self:RefreshRaidPrepUI()
+        end
+    elseif tabKey == "notes" then
+        self.notesTabContent:Show()
+        if self.scrollBar then
+            self.scrollBar:Hide()
+        end
+        if self.RefreshNotesUI then
+            self:RefreshNotesUI()
+        end
     elseif tabKey == "settings" then
         self.settingsTabContent:Show()
         if self.scrollBar then
@@ -683,6 +779,12 @@ function DISCONTENT:SetActiveTab(tabKey)
     end
     if self.professionsTabButton then
         self.professionsTabButton:SetEnabled(tabKey ~= "professions")
+    end
+    if self.raidPrepTabButton then
+        self.raidPrepTabButton:SetEnabled(tabKey ~= "raidprep")
+    end
+    if self.notesTabButton then
+        self.notesTabButton:SetEnabled(tabKey ~= "notes")
     end
     if self.settingsTabButton then
         self.settingsTabButton:SetEnabled(tabKey ~= "settings")
@@ -864,6 +966,14 @@ function DISCONTENT:UpdateLayout()
         self:UpdateProfessionsLayout()
     end
 
+    if self.UpdateRaidPrepLayout then
+        self:UpdateRaidPrepLayout()
+    end
+
+    if self.UpdateNotesLayout then
+        self:UpdateNotesLayout()
+    end
+
     if self.UpdateSettingsLayout then
         self:UpdateSettingsLayout()
     end
@@ -923,16 +1033,25 @@ function DISCONTENT:CreateUI()
     self.closeButton = CreateFrame("Button", nil, self, "UIPanelCloseButton")
     self.closeButton:SetPoint("TOPRIGHT", -4, -4)
 
+    self.versionText = self:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    self.versionText:SetPoint("RIGHT", self.closeButton, "LEFT", -6, 1)
+    self.versionText:SetText("v" .. tostring(self.addonVersion or "?"))
+    self.versionText:SetTextColor(0.75, 0.75, 0.75, 1)
+
     self.guildNewsTabButton = self:CreateTabButton(self, "Gilden-News", "TOPLEFT", self, "TOPLEFT", 16, -42, "guildnews")
     self.overviewTabButton = self:CreateTabButton(self, "Overview", "LEFT", self.guildNewsTabButton, "RIGHT", 8, 0, "overview")
     self.guildChatTabButton = self:CreateTabButton(self, "Gildenchat", "LEFT", self.overviewTabButton, "RIGHT", 8, 0, "guildchat")
     self.professionsTabButton = self:CreateTabButton(self, "Berufe", "LEFT", self.guildChatTabButton, "RIGHT", 8, 0, "professions")
-    self.settingsTabButton = self:CreateTabButton(self, "Einstellungen", "LEFT", self.professionsTabButton, "RIGHT", 8, 0, "settings")
+    self.raidPrepTabButton = self:CreateTabButton(self, "Raid-Prep", "LEFT", self.professionsTabButton, "RIGHT", 8, 0, "raidprep")
+    self.notesTabButton = self:CreateTabButton(self, "Notes", "LEFT", self.raidPrepTabButton, "RIGHT", 8, 0, "notes")
+    self.settingsTabButton = self:CreateTabButton(self, "Einstellungen", "LEFT", self.notesTabButton, "RIGHT", 8, 0, "settings")
 
     self.guildNewsTabContent = CreateFrame("Frame", nil, self)
     self.overviewTabContent = CreateFrame("Frame", nil, self)
     self.guildChatTabContent = CreateFrame("Frame", nil, self)
     self.professionsTabContent = CreateFrame("Frame", nil, self)
+    self.raidPrepTabContent = CreateFrame("Frame", nil, self)
+    self.notesTabContent = CreateFrame("Frame", nil, self)
     self.settingsTabContent = CreateFrame("Frame", nil, self)
 
     if self.CreateGuildNewsUI then
@@ -949,6 +1068,14 @@ function DISCONTENT:CreateUI()
 
     if self.CreateProfessionsUI then
         self:CreateProfessionsUI()
+    end
+
+    if self.CreateRaidPrepUI then
+        self:CreateRaidPrepUI()
+    end
+
+    if self.CreateNotesUI then
+        self:CreateNotesUI()
     end
 
     if self.CreateSettingsUI then
@@ -999,6 +1126,32 @@ function DISCONTENT:CreateUI()
                 end
 
                 DISCONTENT.professionScrollBar:SetValue(newVal)
+            end
+        elseif DISCONTENT.activeTab == "raidprep" then
+            if DISCONTENT.raidPrepScrollFrame and DISCONTENT.raidPrepScrollFrame.ScrollBar then
+                local sb = DISCONTENT.raidPrepScrollFrame.ScrollBar
+                local current = sb:GetValue() or 0
+                local step = 28
+
+                if delta > 0 then
+                    sb:SetValue(math.max(0, current - step))
+                else
+                    local _, maxVal = sb:GetMinMaxValues()
+                    sb:SetValue(math.min(maxVal or 0, current + step))
+                end
+            end
+        elseif DISCONTENT.activeTab == "notes" then
+            if DISCONTENT.notesScrollFrame and DISCONTENT.notesScrollFrame.ScrollBar then
+                local sb = DISCONTENT.notesScrollFrame.ScrollBar
+                local current = sb:GetValue() or 0
+                local step = 28
+
+                if delta > 0 then
+                    sb:SetValue(math.max(0, current - step))
+                else
+                    local _, maxVal = sb:GetMinMaxValues()
+                    sb:SetValue(math.min(maxVal or 0, current + step))
+                end
             end
         end
     end)
@@ -1076,7 +1229,18 @@ DISCONTENT:SetScript("OnEvent", function(self, event, ...)
         self:AddGuildChatMessage(author, message, "O")
     elseif event == "CHAT_MSG_ADDON" then
         local prefix, message, channel, sender = ...
-
+    elseif event == "CHAT_MSG_RAID" then
+        local message, author = ...
+        self:AddGuildChatMessage(author, message, "R")
+    elseif event == "CHAT_MSG_RAID_LEADER" then
+        local message, author = ...
+        self:AddGuildChatMessage(author, message, "RL")
+    elseif event == "CHAT_MSG_INSTANCE_CHAT" then
+        local message, author = ...
+        self:AddGuildChatMessage(author, message, "I")
+    elseif event == "CHAT_MSG_INSTANCE_CHAT_LEADER" then
+        local message, author = ...
+        self:AddGuildChatMessage(author, message, "IL")
         if self.HandleProfessionAddonMessage then
             self:HandleProfessionAddonMessage(prefix, message, channel, sender)
         end
@@ -1103,3 +1267,7 @@ DISCONTENT:RegisterEvent("CHAT_MSG_GUILD")
 DISCONTENT:RegisterEvent("CHAT_MSG_OFFICER")
 DISCONTENT:RegisterEvent("CHAT_MSG_ADDON")
 DISCONTENT:RegisterEvent("SKILL_LINES_CHANGED")
+DISCONTENT:RegisterEvent("CHAT_MSG_RAID")
+DISCONTENT:RegisterEvent("CHAT_MSG_RAID_LEADER")
+DISCONTENT:RegisterEvent("CHAT_MSG_INSTANCE_CHAT")
+DISCONTENT:RegisterEvent("CHAT_MSG_INSTANCE_CHAT_LEADER")

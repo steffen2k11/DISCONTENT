@@ -11,5 +11,7 @@ DISCONTENT_GuildNews.lua
 DISCONTENT_Overview.lua
 DISCONTENT_GuildChat.lua
 DISCONTENT_Professions.lua
+DISCONTENT_RaidPrep.lua
 DISCONTENT_Settings.lua
 DISCONTENT_gear.lua
+DISCONTENT_Notes.lua

@@ -18,7 +18,7 @@ function DISCONTENT:CreateHeaderButton(parent, text, width, point, relativeTo, r
 
     btn.arrowText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     btn.arrowText:SetPoint("LEFT", btn.text, "RIGHT", 6, 0)
-    btn.arrowText:SetText("--")
+    btn.arrowText:SetText("-")
     btn.arrowText:SetTextColor(0.55, 0.55, 0.55, 1)
 
     return btn
@@ -44,7 +44,7 @@ function DISCONTENT:CreateOnlineOnlyCheckbox()
 
     check.tick = check:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     check.tick:SetPoint("CENTER", check.box, "CENTER", 0, 0)
-    check.tick:SetText("✓")
+    check.tick:SetText("X")
     check.tick:SetTextColor(1, 0.82, 0, 1)
     check.tick:Hide()
 
@@ -130,38 +130,38 @@ function DISCONTENT:CreateOverviewUI()
     )
 
     self.serverHeaderButton = self:CreateHeaderButton(
-        self.overviewTabContent, "Server", 110,
+        self.overviewTabContent, "Server", 130,
         "TOPLEFT", self.overviewTabContent, "TOPLEFT", 260, -52,
         "server"
     )
 
     self.rankHeaderButton = self:CreateHeaderButton(
         self.overviewTabContent, "Rang", 150,
-        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 380, -52,
+        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 400, -52,
         "rank"
     )
 
     self.levelHeaderButton = self:CreateHeaderButton(
         self.overviewTabContent, "Lvl", 45,
-        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 540, -52,
+        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 560, -52,
         "level"
     )
 
     self.classHeaderButton = self:CreateHeaderButton(
         self.overviewTabContent, "Klasse", 90,
-        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 600, -52,
+        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 620, -52,
         "class"
     )
 
     self.ilvlHeaderButton = self:CreateHeaderButton(
         self.overviewTabContent, "iLvl", 55,
-        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 700, -52,
+        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 720, -52,
         "ilvl"
     )
 
     self.zoneHeaderButton = self:CreateHeaderButton(
-        self.overviewTabContent, "Gebiet", 160,
-        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 770, -52,
+        self.overviewTabContent, "Gebiet", 150,
+        "TOPLEFT", self.overviewTabContent, "TOPLEFT", 790, -52,
         "zone"
     )
 
@@ -217,10 +217,28 @@ function DISCONTENT:EnsureRowCount()
             row.bg:SetColorTexture(1, 1, 1, 0.04)
         end
 
-        row.addonStatus = row:CreateTexture(nil, "OVERLAY")
-        row.addonStatus:SetSize(8, 8)
-        row.addonStatus:SetTexture("Interface\\Buttons\\WHITE8X8")
-        row.addonStatus:SetColorTexture(0.4, 0.4, 0.4, 1)
+        row.addonStatus = CreateFrame("Frame", nil, row)
+        row.addonStatus:SetSize(12, 12)
+
+        row.addonStatus.dot = row.addonStatus:CreateTexture(nil, "OVERLAY")
+        row.addonStatus.dot:SetAllPoints()
+        row.addonStatus.dot:SetTexture("Interface\\Buttons\\WHITE8X8")
+        row.addonStatus.dot:SetColorTexture(0.4, 0.4, 0.4, 1)
+
+        row.addonStatus:SetScript("OnEnter", function(btn)
+            if not row.member then return end
+
+            local _, _, _, tooltipText = DISCONTENT:GetAddonStatusInfo(row.member)
+
+            GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+            GameTooltip:SetText(row.member.name or "-")
+            GameTooltip:AddLine(tooltipText or "Addon unbekannt", 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+
+        row.addonStatus:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
 
         row.nameButton = CreateFrame("Button", nil, row)
         row.nameButton:SetNormalFontObject("GameFontNormal")
@@ -256,9 +274,14 @@ function DISCONTENT:EnsureRowCount()
         end)
         row.inviteButton:SetScript("OnEnter", function(btn)
             btn.text:SetTextColor(1, 0.82, 0)
+
+            GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+            GameTooltip:SetText("In Gruppe einladen")
+            GameTooltip:Show()
         end)
         row.inviteButton:SetScript("OnLeave", function(btn)
             btn.text:SetTextColor(0.7, 0.7, 0.7)
+            GameTooltip:Hide()
         end)
 
         row.whisperButton = CreateFrame("Button", nil, row)
@@ -274,9 +297,14 @@ function DISCONTENT:EnsureRowCount()
         end)
         row.whisperButton:SetScript("OnEnter", function(btn)
             btn.text:SetTextColor(1, 0.82, 0)
+
+            GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Nachricht schreiben")
+            GameTooltip:Show()
         end)
         row.whisperButton:SetScript("OnLeave", function(btn)
             btn.text:SetTextColor(0.7, 0.7, 0.7)
+            GameTooltip:Hide()
         end)
 
         row.serverText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -291,7 +319,32 @@ function DISCONTENT:EnsureRowCount()
         row.classText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         row.classText:SetJustifyH("LEFT")
 
-        row.ilvlText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        row.ilvlButton = CreateFrame("Button", nil, row)
+        row.ilvlButton:SetSize(55, 18)
+        row.ilvlButton:SetScript("OnClick", function()
+            if row.member then
+                DISCONTENT:ShowGear(row.member)
+            end
+        end)
+        row.ilvlButton:SetScript("OnEnter", function(btn)
+            GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Geardetails öffnen")
+            GameTooltip:AddLine("Klick zeigt alle bekannten Items, iLvl, Enchants und Gems.", 1, 1, 1, true)
+            GameTooltip:Show()
+
+            if row.ilvlText then
+                row.ilvlText:SetTextColor(1, 0.82, 0)
+            end
+        end)
+        row.ilvlButton:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+            if row.member then
+                DISCONTENT:RefreshOverviewRowIlvl(row, row.member)
+            end
+        end)
+
+        row.ilvlText = row.ilvlButton:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        row.ilvlText:SetPoint("LEFT", 0, 0)
         row.ilvlText:SetJustifyH("LEFT")
 
         row.zoneText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -301,6 +354,23 @@ function DISCONTENT:EnsureRowCount()
         row.statusText:SetJustifyH("LEFT")
 
         self.rows[i] = row
+    end
+end
+
+function DISCONTENT:RefreshOverviewRowIlvl(row, member)
+    if not row or not member or not row.ilvlText then return end
+
+    local key = self:GetCharacterKey(member.name, member.realm)
+    local gearTable = self.gearData or {}
+    local gear = gearTable[key]
+
+    if gear and gear.ilvl then
+        local ilvl = math.floor(tonumber(gear.ilvl) or 0)
+        row.ilvlText:SetText(tostring(ilvl))
+        row.ilvlText:SetTextColor(1, 1, 1)
+    else
+        row.ilvlText:SetText("-")
+        row.ilvlText:SetTextColor(0.7, 0.7, 0.7)
     end
 end
 
@@ -323,8 +393,7 @@ function DISCONTENT:UpdateRows()
         row:SetHeight(self.rowHeight)
 
         row.addonStatus:ClearAllPoints()
-        row.addonStatus:SetPoint("LEFT", row, "LEFT", layout.addonStatusX + 4, 0)
-        row.addonStatus:SetSize(8, 8)
+        row.addonStatus:SetPoint("LEFT", row, "LEFT", layout.addonStatusX + 2, 0)
 
         row.nameButton:ClearAllPoints()
         row.nameButton:SetPoint("LEFT", row, "LEFT", layout.nameX, 0)
@@ -358,8 +427,10 @@ function DISCONTENT:UpdateRows()
         row.classText:SetPoint("LEFT", row, "LEFT", layout.classX, 0)
         row.classText:SetWidth(layout.classWidth)
 
-        row.ilvlText:ClearAllPoints()
-        row.ilvlText:SetPoint("LEFT", row, "LEFT", layout.ilvlX, 0)
+        row.ilvlButton:ClearAllPoints()
+        row.ilvlButton:SetPoint("LEFT", row, "LEFT", layout.ilvlX, 0)
+        row.ilvlButton:SetSize(layout.ilvlWidth, 18)
+
         row.ilvlText:SetWidth(layout.ilvlWidth)
 
         row.zoneText:ClearAllPoints()
@@ -378,44 +449,16 @@ function DISCONTENT:UpdateRows()
                 row.nameButton:GetFontString():SetTextColor(0.85, 0.92, 1)
             end
 
-            local ar, ag, ab, tooltipText = self:GetAddonStatusInfo(member)
-            row.addonStatus:SetColorTexture(ar, ag, ab, 1)
+            local ar, ag, ab = self:GetAddonStatusInfo(member)
+            row.addonStatus.dot:SetColorTexture(ar, ag, ab, 1)
 
-            row:SetScript("OnEnter", function()
-                GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-                GameTooltip:SetText(member.name or "-")
-                GameTooltip:AddLine(tooltipText or "Addon unbekannt", 1, 1, 1, true)
-                GameTooltip:Show()
-            end)
+            row:SetScript("OnEnter", nil)
+            row:SetScript("OnLeave", nil)
 
-            row:SetScript("OnLeave", function()
-                GameTooltip:Hide()
-            end)
-
-            row.serverText:SetText(member.realm)
+            row.serverText:SetText(member.realm or "-")
             row.rankText:SetText(member.rankName)
             row.levelText:SetText(tostring(member.level))
             row.classText:SetText(member.className)
-
-            local key = self:GetCharacterKey(member.name, member.realm)
-            local gearTable = self.gearData or {}
-            local gear = gearTable[key]
-
-            if gear and gear.ilvl then
-                local ilvl = math.floor(tonumber(gear.ilvl) or 0)
-                row.ilvlText:SetText(tostring(ilvl))
-
-                if self.GetGearColor then
-                    local ir, ig, ib = self:GetGearColor(ilvl)
-                    row.ilvlText:SetTextColor(ir, ig, ib)
-                else
-                    row.ilvlText:SetTextColor(1, 1, 1)
-                end
-            else
-                row.ilvlText:SetText("-")
-                row.ilvlText:SetTextColor(0.5, 0.5, 0.5)
-            end
-
             row.zoneText:SetText(member.zone)
             row.statusText:SetText(member.isOnline and "Online" or "Offline")
 
@@ -433,11 +476,14 @@ function DISCONTENT:UpdateRows()
             local r, g, b = self:GetClassColor(member.classFileName)
             row.classText:SetTextColor(r, g, b)
 
+            self:RefreshOverviewRowIlvl(row, member)
+
             row:Show()
             row.addonStatus:Show()
             row.nameButton:Show()
             row.inviteButton:Show()
             row.whisperButton:Show()
+            row.ilvlButton:Show()
         else
             row.member = nil
             row:SetScript("OnEnter", nil)

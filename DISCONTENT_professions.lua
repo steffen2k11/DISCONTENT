@@ -307,6 +307,60 @@ function DISCONTENT:EnsureProfessionRowCount()
         row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         row.nameText:SetJustifyH("LEFT")
 
+        row.inviteButton = CreateFrame("Button", nil, row)
+        row.inviteButton:SetSize(16, 16)
+        row.inviteButton.text = row.inviteButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.inviteButton.text:SetPoint("CENTER")
+        row.inviteButton.text:SetText("+")
+        row.inviteButton.text:SetTextColor(0.7, 0.7, 0.7)
+        row.inviteButton:SetScript("OnClick", function()
+            if row.entry then
+                DISCONTENT:InviteMember({
+                    name = row.entry.name,
+                    realm = row.entry.realm,
+                    fullName = row.entry.name .. "-" .. (row.entry.realm or GetRealmName() or "-"),
+                })
+            end
+        end)
+        row.inviteButton:SetScript("OnEnter", function(btn)
+            btn.text:SetTextColor(1, 0.82, 0)
+
+            GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+            GameTooltip:SetText("In Gruppe einladen")
+            GameTooltip:Show()
+        end)
+        row.inviteButton:SetScript("OnLeave", function(btn)
+            btn.text:SetTextColor(0.7, 0.7, 0.7)
+            GameTooltip:Hide()
+        end)
+
+        row.whisperButton = CreateFrame("Button", nil, row)
+        row.whisperButton:SetSize(16, 16)
+        row.whisperButton.text = row.whisperButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.whisperButton.text:SetPoint("CENTER")
+        row.whisperButton.text:SetText("@")
+        row.whisperButton.text:SetTextColor(0.7, 0.7, 0.7)
+        row.whisperButton:SetScript("OnClick", function()
+            if row.entry then
+                DISCONTENT:WhisperMember({
+                    name = row.entry.name,
+                    realm = row.entry.realm,
+                    fullName = row.entry.name .. "-" .. (row.entry.realm or GetRealmName() or "-"),
+                })
+            end
+        end)
+        row.whisperButton:SetScript("OnEnter", function(btn)
+            btn.text:SetTextColor(1, 0.82, 0)
+
+            GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Nachricht schreiben")
+            GameTooltip:Show()
+        end)
+        row.whisperButton:SetScript("OnLeave", function(btn)
+            btn.text:SetTextColor(0.7, 0.7, 0.7)
+            GameTooltip:Hide()
+        end)
+
         row.serverText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         row.serverText:SetJustifyH("LEFT")
 
@@ -338,14 +392,17 @@ function DISCONTENT:UpdateProfessionRows()
     local rightMargin = 42
     local usableWidth = frameWidth - leftMargin - rightMargin
 
-    local nameWidth = math.max(130, math.floor(usableWidth * 0.18))
+    local nameWidth = math.max(130, math.floor(usableWidth * 0.16))
+    local actionWidth = 40
     local serverWidth = math.max(120, math.floor(usableWidth * 0.16))
-    local prof1Width = math.max(220, math.floor(usableWidth * 0.25))
-    local prof2Width = math.max(220, math.floor(usableWidth * 0.25))
-    local updatedWidth = math.max(130, usableWidth - nameWidth - serverWidth - prof1Width - prof2Width - 20)
+    local prof1Width = math.max(210, math.floor(usableWidth * 0.24))
+    local prof2Width = math.max(210, math.floor(usableWidth * 0.24))
+    local updatedWidth = math.max(120, usableWidth - nameWidth - actionWidth - serverWidth - prof1Width - prof2Width - 30)
 
     local xName = 4
-    local xServer = xName + nameWidth + 10
+    local xInvite = xName + nameWidth + 4
+    local xWhisper = xInvite + 18
+    local xServer = xName + nameWidth + actionWidth + 10
     local xProf1 = xServer + serverWidth + 10
     local xProf2 = xProf1 + prof1Width + 10
     local xUpdated = xProf2 + prof2Width + 10
@@ -355,13 +412,19 @@ function DISCONTENT:UpdateProfessionRows()
         local entry = entries[startIndex + i - 1]
 
         row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", leftMargin, -132 - ((i - 1) * self.professionRowHeight))
+        row:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", leftMargin, -148 - ((i - 1) * self.professionRowHeight))
         row:SetWidth(usableWidth)
         row:SetHeight(self.professionRowHeight)
 
         row.nameText:ClearAllPoints()
         row.nameText:SetPoint("LEFT", row, "LEFT", xName, 0)
         row.nameText:SetWidth(nameWidth)
+
+        row.inviteButton:ClearAllPoints()
+        row.inviteButton:SetPoint("LEFT", row, "LEFT", xInvite, 0)
+
+        row.whisperButton:ClearAllPoints()
+        row.whisperButton:SetPoint("LEFT", row, "LEFT", xWhisper, 0)
 
         row.serverText:ClearAllPoints()
         row.serverText:SetPoint("LEFT", row, "LEFT", xServer, 0)
@@ -394,6 +457,8 @@ function DISCONTENT:UpdateProfessionRows()
             row.updatedText:SetTextColor(0.75, 0.75, 0.75)
 
             row:Show()
+            row.inviteButton:Show()
+            row.whisperButton:Show()
         else
             row.entry = nil
             row:Hide()
@@ -535,14 +600,15 @@ function DISCONTENT:UpdateProfessionsLayout()
     local rightMargin = 42
     local usableWidth = frameWidth - leftMargin - rightMargin
 
-    local nameWidth = math.max(130, math.floor(usableWidth * 0.18))
+    local nameWidth = math.max(130, math.floor(usableWidth * 0.16))
+    local actionWidth = 40
     local serverWidth = math.max(120, math.floor(usableWidth * 0.16))
-    local prof1Width = math.max(220, math.floor(usableWidth * 0.25))
-    local prof2Width = math.max(220, math.floor(usableWidth * 0.25))
-    local updatedWidth = math.max(130, usableWidth - nameWidth - serverWidth - prof1Width - prof2Width - 20)
+    local prof1Width = math.max(210, math.floor(usableWidth * 0.24))
+    local prof2Width = math.max(210, math.floor(usableWidth * 0.24))
+    local updatedWidth = math.max(120, usableWidth - nameWidth - actionWidth - serverWidth - prof1Width - prof2Width - 30)
 
     local xName = leftMargin + 4
-    local xServer = xName + nameWidth + 10
+    local xServer = xName + nameWidth + actionWidth + 10
     local xProf1 = xServer + serverWidth + 10
     local xProf2 = xProf1 + prof1Width + 10
     local xUpdated = xProf2 + prof2Width + 10
