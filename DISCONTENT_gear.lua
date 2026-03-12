@@ -178,6 +178,24 @@ function DISCONTENT:GetItemIDFromLink(itemLink)
     return itemID or 0
 end
 
+function DISCONTENT:GetItemStringFromLink(itemLink)
+    if not itemLink or itemLink == "" then
+        return ""
+    end
+
+    local itemString = string.match(itemLink, "|H(item:[^|]+)|h")
+    if itemString and itemString ~= "" then
+        return itemString
+    end
+
+    itemString = string.match(itemLink, "(item:[^|]+)")
+    if itemString and itemString ~= "" then
+        return itemString
+    end
+
+    return ""
+end
+
 function DISCONTENT:BuildItemLinkFromID(itemID)
     itemID = tonumber(itemID) or 0
     if itemID <= 0 then
@@ -273,11 +291,14 @@ function DISCONTENT:GetGearSnapshot()
             local enchantId, gems = self:ParseItemLinkData(itemLink)
             local icon = self:GetItemIconSafe(itemLink, itemID)
 
+            local itemString = self:GetItemStringFromLink(itemLink)
+
             data.slots[slotInfo.key] = {
                 slotKey = slotInfo.key,
                 slotLabel = slotInfo.label,
                 itemID = itemID,
-                itemLink = itemLink,
+                itemLink = itemString ~= "" and itemString or itemLink,
+                itemString = itemString,
                 itemName = itemName,
                 itemLevel = itemLevel or 0,
                 enchantId = enchantId or 0,
@@ -425,18 +446,20 @@ function DISCONTENT:SendFullGearToTarget(target)
         local slotData = snap.slots and snap.slots[slotInfo.key]
 
         if slotData then
+            local itemString = slotData.itemString or self:GetItemStringFromLink(slotData.itemLink)
+            if itemString == "" then
+                itemString = self:BuildItemLinkFromID(slotData.itemID)
+            end
+
             local slotMsg = table.concat({
                 "GI",
                 snap.name or "",
                 snap.realm or "",
                 slotInfo.key or "",
-                tostring(slotData.itemID or 0),
                 tostring(slotData.itemLevel or 0),
-                tostring(slotData.enchantId or 0),
-                self:SerializeGemList(slotData.gems or {}),
-                tostring(slotData.icon or 134400),
                 tostring(snap.time or time()),
                 tostring(syncToken),
+                itemString or "",
             }, "^")
 
             C_Timer.After(delay, function()
@@ -541,19 +564,38 @@ function DISCONTENT:HandleGearMessage(prefix, msg, channel, sender)
         local name = parts[2]
         local realm = parts[3]
         local slotKey = parts[4]
-        local itemID = tonumber(parts[5]) or 0
-        local itemLevel = tonumber(parts[6]) or 0
-        local enchantId = tonumber(parts[7]) or 0
-        local gems = self:DeserializeGemList(parts[8] or "")
-        local icon = tonumber(parts[9]) or 134400
-        local syncTime = tonumber(parts[10]) or time()
-        local syncToken = parts[11]
+        local itemLevel = 0
+        local syncTime = time()
+        local syncToken
+        local itemLink = ""
+        local itemID = 0
+        local icon = 134400
+        local enchantId = 0
+        local gems = {}
 
         if not name or name == "" then return end
         if not realm or realm == "" then
             realm = GetRealmName() or "-"
         end
         if not slotKey or slotKey == "" then return end
+
+        if #parts >= 8 then
+            itemLevel = tonumber(parts[5]) or 0
+            syncTime = tonumber(parts[6]) or time()
+            syncToken = parts[7]
+            itemLink = parts[8] or ""
+            itemID = self:GetItemIDFromLink(itemLink)
+            icon = self:GetItemIconSafe(itemLink, itemID)
+        else
+            itemID = tonumber(parts[5]) or 0
+            itemLevel = tonumber(parts[6]) or 0
+            enchantId = tonumber(parts[7]) or 0
+            gems = self:DeserializeGemList(parts[8] or "")
+            icon = tonumber(parts[9]) or 134400
+            syncTime = tonumber(parts[10]) or time()
+            syncToken = parts[11]
+            itemLink = self:BuildItemLinkFromID(itemID)
+        end
 
         local key = self:GetCharacterKey(name, realm)
         local gearTable = self:EnsureGearData()
@@ -568,8 +610,6 @@ function DISCONTENT:HandleGearMessage(prefix, msg, channel, sender)
             return
         end
 
-        local itemLink = self:BuildItemLinkFromID(itemID)
-
         self:StoreGear({
             name = name,
             realm = realm,
@@ -581,6 +621,7 @@ function DISCONTENT:HandleGearMessage(prefix, msg, channel, sender)
                     slotLabel = self:GetGearSlotLabel(slotKey),
                     itemID = itemID,
                     itemLink = itemLink,
+                    itemString = self:GetItemStringFromLink(itemLink),
                     itemName = "",
                     itemLevel = itemLevel,
                     enchantId = enchantId,
@@ -849,11 +890,12 @@ function DISCONTENT:UpdateGearPopup(member)
 
         if slotData then
             local itemID = tonumber(slotData.itemID) or 0
-            local itemLink = slotData.itemLink
+            local itemLink = slotData.itemLink or slotData.itemString
             if (not itemLink or itemLink == "") and itemID > 0 then
                 itemLink = self:BuildItemLinkFromID(itemID)
-                slotData.itemLink = itemLink
             end
+            slotData.itemLink = itemLink
+            slotData.itemString = self:GetItemStringFromLink(itemLink)
 
             local itemName = self:GetItemNameSafe(itemLink, slotData.itemName or "Unbekannt")
             local itemLevel = math.floor(tonumber(slotData.itemLevel) or 0)

@@ -139,6 +139,7 @@ function DISCONTENT:StoreProfessionEntry(entry)
     self:SaveSettings()
 
     if self.uiCreated and self.UpdateProfessionRows then
+        self:RefreshProfessionFilterDropdowns()
         self:UpdateProfessionRows()
     end
 end
@@ -246,11 +247,217 @@ function DISCONTENT:FormatUpdatedAt(timestamp)
     return date("%d.%m. %H:%M", timestamp)
 end
 
+function DISCONTENT:EnsureProfessionFilterDB()
+    if type(self.db) ~= "table" then
+        return {}
+    end
+
+    if type(self.db.professionFilters) ~= "table" then
+        self.db.professionFilters = {}
+    end
+
+    local db = self.db.professionFilters
+
+    if type(db.professionName) ~= "string" or db.professionName == "" then
+        db.professionName = "ALLE"
+    end
+
+    if type(db.minSkill) ~= "number" then
+        db.minSkill = 0
+    end
+
+    if type(self.professionSelectedFilter) ~= "string" or self.professionSelectedFilter == "" then
+        self.professionSelectedFilter = db.professionName
+    end
+
+    if type(self.professionMinSkillFilter) ~= "number" then
+        self.professionMinSkillFilter = db.minSkill
+    end
+
+    return db
+end
+
+function DISCONTENT:SaveProfessionFilterSettings()
+    local db = self:EnsureProfessionFilterDB()
+    db.professionName = self.professionSelectedFilter or "ALLE"
+    db.minSkill = tonumber(self.professionMinSkillFilter) or 0
+    self:SaveSettings()
+end
+
+function DISCONTENT:GetProfessionSkillFilterOptions()
+    return {
+        { text = "ALLE", value = 0 },
+        { text = "1+", value = 1 },
+        { text = "25+", value = 25 },
+        { text = "50+", value = 50 },
+        { text = "75+", value = 75 },
+        { text = "100+", value = 100 },
+        { text = "150+", value = 150 },
+        { text = "200+", value = 200 },
+        { text = "300+", value = 300 },
+    }
+end
+
+function DISCONTENT:GetProfessionMinSkillLabel(value)
+    local numeric = tonumber(value) or 0
+    if numeric <= 0 then
+        return "ALLE"
+    end
+
+    local options = self:GetProfessionSkillFilterOptions()
+    for i = 1, #options do
+        if options[i].value == numeric then
+            return options[i].text
+        end
+    end
+
+    return tostring(numeric) .. "+"
+end
+
+function DISCONTENT:GetUniqueProfessionNames()
+    local names = {}
+    local seen = {}
+
+    for _, entry in pairs(self.professions or {}) do
+        local prof1 = tostring(entry.prof1Name or "")
+        local prof2 = tostring(entry.prof2Name or "")
+
+        if prof1 ~= "" and not seen[prof1] then
+            seen[prof1] = true
+            names[#names + 1] = prof1
+        end
+
+        if prof2 ~= "" and not seen[prof2] then
+            seen[prof2] = true
+            names[#names + 1] = prof2
+        end
+    end
+
+    table.sort(names, function(a, b)
+        return self:NormalizeText(a) < self:NormalizeText(b)
+    end)
+
+    return names
+end
+
+function DISCONTENT:GetProfessionSkillForFilter(entry, selectedProfession)
+    if not entry then
+        return 0
+    end
+
+    local prof1Name = tostring(entry.prof1Name or "")
+    local prof2Name = tostring(entry.prof2Name or "")
+    local prof1Skill = tonumber(entry.prof1Skill) or 0
+    local prof2Skill = tonumber(entry.prof2Skill) or 0
+
+    if not selectedProfession or selectedProfession == "" or selectedProfession == "ALLE" then
+        return math.max(prof1Skill, prof2Skill)
+    end
+
+    local best = 0
+    if prof1Name == selectedProfession then
+        best = math.max(best, prof1Skill)
+    end
+    if prof2Name == selectedProfession then
+        best = math.max(best, prof2Skill)
+    end
+
+    return best
+end
+
+function DISCONTENT:EntryMatchesProfessionFilter(entry, selectedProfession)
+    if not selectedProfession or selectedProfession == "" or selectedProfession == "ALLE" then
+        return true
+    end
+
+    return entry.prof1Name == selectedProfession or entry.prof2Name == selectedProfession
+end
+
+function DISCONTENT:ApplyProfessionFilters()
+    self:EnsureProfessionFilterDB()
+    self.professionScrollOffset = 0
+
+    if self.professionFilterDropdown then
+        UIDropDownMenu_SetText(self.professionFilterDropdown, self.professionSelectedFilter or "ALLE")
+    end
+
+    if self.professionSkillDropdown then
+        UIDropDownMenu_SetText(self.professionSkillDropdown, self:GetProfessionMinSkillLabel(self.professionMinSkillFilter))
+    end
+
+    if self.uiCreated then
+        self:UpdateProfessionRows()
+    end
+end
+
+function DISCONTENT:SetProfessionNameFilter(value)
+    self.professionSelectedFilter = (type(value) == "string" and value ~= "") and value or "ALLE"
+    self:SaveProfessionFilterSettings()
+    self:ApplyProfessionFilters()
+end
+
+function DISCONTENT:SetProfessionMinSkillFilter(value)
+    self.professionMinSkillFilter = tonumber(value) or 0
+    self:SaveProfessionFilterSettings()
+    self:ApplyProfessionFilters()
+end
+
+function DISCONTENT:RefreshProfessionFilterDropdowns()
+    self:EnsureProfessionFilterDB()
+
+    if self.professionFilterDropdown then
+        UIDropDownMenu_Initialize(self.professionFilterDropdown, function(frame, level, menuList)
+            local info = UIDropDownMenu_CreateInfo()
+
+            info.text = "ALLE"
+            info.checked = (DISCONTENT.professionSelectedFilter or "ALLE") == "ALLE"
+            info.func = function()
+                DISCONTENT:SetProfessionNameFilter("ALLE")
+            end
+            UIDropDownMenu_AddButton(info)
+
+            local names = DISCONTENT:GetUniqueProfessionNames()
+            for i = 1, #names do
+                local professionName = names[i]
+                local rowInfo = UIDropDownMenu_CreateInfo()
+                rowInfo.text = professionName
+                rowInfo.checked = (DISCONTENT.professionSelectedFilter or "ALLE") == professionName
+                rowInfo.func = function()
+                    DISCONTENT:SetProfessionNameFilter(professionName)
+                end
+                UIDropDownMenu_AddButton(rowInfo)
+            end
+        end)
+
+        UIDropDownMenu_SetText(self.professionFilterDropdown, self.professionSelectedFilter or "ALLE")
+    end
+
+    if self.professionSkillDropdown then
+        UIDropDownMenu_Initialize(self.professionSkillDropdown, function(frame, level, menuList)
+            local options = DISCONTENT:GetProfessionSkillFilterOptions()
+            for i = 1, #options do
+                local option = options[i]
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = option.text
+                info.checked = (tonumber(DISCONTENT.professionMinSkillFilter) or 0) == option.value
+                info.func = function()
+                    DISCONTENT:SetProfessionMinSkillFilter(option.value)
+                end
+                UIDropDownMenu_AddButton(info)
+            end
+        end)
+
+        UIDropDownMenu_SetText(self.professionSkillDropdown, self:GetProfessionMinSkillLabel(self.professionMinSkillFilter))
+    end
+end
+
 function DISCONTENT:GetFilteredProfessionEntries()
+    self:EnsureProfessionFilterDB()
+
     local entries = {}
 
     for _, entry in pairs(self.professions or {}) do
-        table.insert(entries, entry)
+        entries[#entries + 1] = entry
     end
 
     table.sort(entries, function(a, b)
@@ -265,10 +472,8 @@ function DISCONTENT:GetFilteredProfessionEntries()
     end)
 
     local search = self:NormalizeText(self.professionSearchText or "")
-    if search == "" then
-        return entries
-    end
-
+    local professionFilter = self.professionSelectedFilter or "ALLE"
+    local minSkill = tonumber(self.professionMinSkillFilter) or 0
     local filtered = {}
 
     for i = 1, #entries do
@@ -278,9 +483,15 @@ function DISCONTENT:GetFilteredProfessionEntries()
             self:NormalizeText(entry.realm),
             self:NormalizeText(entry.prof1Name),
             self:NormalizeText(entry.prof2Name),
+            tostring(tonumber(entry.prof1Skill) or 0),
+            tostring(tonumber(entry.prof2Skill) or 0),
         }, " ")
 
-        if string.find(haystack, search, 1, true) then
+        local searchOk = (search == "") or (string.find(haystack, search, 1, true) ~= nil)
+        local professionOk = self:EntryMatchesProfessionFilter(entry, professionFilter)
+        local skillOk = self:GetProfessionSkillForFilter(entry, professionFilter) >= minSkill
+
+        if searchOk and professionOk and skillOk then
             filtered[#filtered + 1] = entry
         end
     end
@@ -378,7 +589,7 @@ function DISCONTENT:EnsureProfessionRowCount()
 end
 
 function DISCONTENT:UpdateProfessionRows()
-    if not self.uiCreated or self.activeTab ~= "professions" then
+    if not self.uiCreated or not self.professionsTabContent then
         return
     end
 
@@ -412,7 +623,7 @@ function DISCONTENT:UpdateProfessionRows()
         local entry = entries[startIndex + i - 1]
 
         row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", leftMargin, -148 - ((i - 1) * self.professionRowHeight))
+        row:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", leftMargin, -178 - ((i - 1) * self.professionRowHeight))
         row:SetWidth(usableWidth)
         row:SetHeight(self.professionRowHeight)
 
@@ -487,7 +698,11 @@ function DISCONTENT:UpdateProfessionRows()
     end
 
     if self.professionCountText then
-        self.professionCountText:SetText("Gespeicherte Einträge: " .. tostring(total))
+        local totalStored = 0
+        for _ in pairs(self.professions or {}) do
+            totalStored = totalStored + 1
+        end
+        self.professionCountText:SetText("Sichtbar: " .. tostring(total) .. " | Gespeichert: " .. tostring(totalStored))
     end
 
     if self.professionStatusText then
@@ -503,6 +718,8 @@ function DISCONTENT:UpdateProfessionRows()
 end
 
 function DISCONTENT:CreateProfessionsUI()
+    self:EnsureProfessionFilterDB()
+
     self.professionsTitle = self.professionsTabContent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     self.professionsTitle:SetText("Berufe")
 
@@ -514,13 +731,24 @@ function DISCONTENT:CreateProfessionsUI()
     self.professionSearchLabel:SetText("Suche:")
 
     self.professionSearchBox = CreateFrame("EditBox", nil, self.professionsTabContent, "InputBoxTemplate")
-    self.professionSearchBox:SetSize(220, 24)
+    self.professionSearchBox:SetSize(180, 24)
     self.professionSearchBox:SetAutoFocus(false)
     self.professionSearchBox:SetScript("OnTextChanged", function(editBox)
         DISCONTENT.professionSearchText = editBox:GetText() or ""
-        DISCONTENT.professionScrollOffset = 0
-        DISCONTENT:UpdateProfessionRows()
+        DISCONTENT:ApplyProfessionFilters()
     end)
+
+    self.professionFilterLabel = self.professionsTabContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    self.professionFilterLabel:SetText("Beruf:")
+
+    self.professionFilterDropdown = CreateFrame("Frame", "DISCONTENTProfessionFilterDropdown", self.professionsTabContent, "UIDropDownMenuTemplate")
+    UIDropDownMenu_SetWidth(self.professionFilterDropdown, 155)
+
+    self.professionSkillLabel = self.professionsTabContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    self.professionSkillLabel:SetText("Berufsstufe:")
+
+    self.professionSkillDropdown = CreateFrame("Frame", "DISCONTENTProfessionSkillDropdown", self.professionsTabContent, "UIDropDownMenuTemplate")
+    UIDropDownMenu_SetWidth(self.professionSkillDropdown, 105)
 
     self.professionSendButton = CreateFrame("Button", nil, self.professionsTabContent, "UIPanelButtonTemplate")
     self.professionSendButton:SetSize(170, 24)
@@ -564,7 +792,9 @@ function DISCONTENT:CreateProfessionsUI()
 
     self.professionCountText = self.professionsTabContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     self.professionCountText:SetJustifyH("LEFT")
-    self.professionCountText:SetText("Gespeicherte Einträge: 0")
+    self.professionCountText:SetText("Sichtbar: 0 | Gespeichert: 0")
+
+    self:RefreshProfessionFilterDropdowns()
 end
 
 function DISCONTENT:UpdateProfessionsLayout()
@@ -589,11 +819,23 @@ function DISCONTENT:UpdateProfessionsLayout()
     self.professionSearchBox:ClearAllPoints()
     self.professionSearchBox:SetPoint("LEFT", self.professionSearchLabel, "RIGHT", 8, 0)
 
+    self.professionFilterLabel:ClearAllPoints()
+    self.professionFilterLabel:SetPoint("LEFT", self.professionSearchBox, "RIGHT", 18, 0)
+
+    self.professionFilterDropdown:ClearAllPoints()
+    self.professionFilterDropdown:SetPoint("LEFT", self.professionFilterLabel, "RIGHT", -14, -3)
+
+    self.professionSkillLabel:ClearAllPoints()
+    self.professionSkillLabel:SetPoint("LEFT", self.professionFilterDropdown, "RIGHT", -8, 0)
+
+    self.professionSkillDropdown:ClearAllPoints()
+    self.professionSkillDropdown:SetPoint("LEFT", self.professionSkillLabel, "RIGHT", -14, 1)
+
     self.professionSendButton:ClearAllPoints()
-    self.professionSendButton:SetPoint("LEFT", self.professionSearchBox, "RIGHT", 12, 0)
+    self.professionSendButton:SetPoint("LEFT", self.professionSkillDropdown, "RIGHT", 8, 0)
 
     self.professionStatusText:ClearAllPoints()
-    self.professionStatusText:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", 16, -102)
+    self.professionStatusText:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", 16, -132)
 
     local frameWidth = self:GetWidth()
     local leftMargin = 16
@@ -614,30 +856,31 @@ function DISCONTENT:UpdateProfessionsLayout()
     local xUpdated = xProf2 + prof2Width + 10
 
     self.professionNameHeader:ClearAllPoints()
-    self.professionNameHeader:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", xName, -122)
+    self.professionNameHeader:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", xName, -152)
 
     self.professionServerHeader:ClearAllPoints()
-    self.professionServerHeader:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", xServer, -122)
+    self.professionServerHeader:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", xServer, -152)
 
     self.professionProf1Header:ClearAllPoints()
-    self.professionProf1Header:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", xProf1, -122)
+    self.professionProf1Header:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", xProf1, -152)
 
     self.professionProf2Header:ClearAllPoints()
-    self.professionProf2Header:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", xProf2, -122)
+    self.professionProf2Header:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", xProf2, -152)
 
     self.professionUpdatedHeader:ClearAllPoints()
-    self.professionUpdatedHeader:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", xUpdated, -122)
+    self.professionUpdatedHeader:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", xUpdated, -152)
 
     self.professionSeparator:ClearAllPoints()
-    self.professionSeparator:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", leftMargin, -142)
+    self.professionSeparator:SetPoint("TOPLEFT", self.professionsTabContent, "TOPLEFT", leftMargin, -172)
     self.professionSeparator:SetSize(usableWidth + 1, 1)
 
     self.professionScrollBar:ClearAllPoints()
-    self.professionScrollBar:SetPoint("TOPRIGHT", self.professionsTabContent, "TOPRIGHT", -22, -150)
+    self.professionScrollBar:SetPoint("TOPRIGHT", self.professionsTabContent, "TOPRIGHT", -22, -180)
     self.professionScrollBar:SetPoint("BOTTOMRIGHT", self.professionsTabContent, "BOTTOMRIGHT", -22, 42)
 
     self.professionCountText:ClearAllPoints()
     self.professionCountText:SetPoint("BOTTOMLEFT", self.professionsTabContent, "BOTTOMLEFT", 16, 14)
 
+    self:RefreshProfessionFilterDropdowns()
     self:UpdateProfessionRows()
 end

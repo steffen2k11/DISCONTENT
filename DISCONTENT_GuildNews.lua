@@ -22,7 +22,7 @@ end
 function DISCONTENT:CreateGuildNewsUI()
     self.newsIntroText = self.guildNewsTabContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.newsIntroText:SetJustifyH("LEFT")
-    self.newsIntroText:SetText("Wichtige Infos für alle DISCONTENT-Mitglieder. Bitte haltet euer Addon regelmäßig aktuell.")
+    self.newsIntroText:SetText("Wichtige Infos für alle Gildenmitglieder. Bitte haltet euer Addon regelmäßig aktuell.")
 
     self.newsPanel = CreateFrame("Frame", nil, self.guildNewsTabContent, "BackdropTemplate")
     self.newsPanel:SetBackdrop({
@@ -52,7 +52,7 @@ function DISCONTENT:BuildNewsMarkup()
     local entries = self:GetSortedNewsEntries()
 
     if not entries or #entries == 0 then
-        return "|cff888888Noch keine Gilden-News vorhanden.|r"
+        return "|cff888888Noch keine News vorhanden.|r"
     end
 
     local parts = {}

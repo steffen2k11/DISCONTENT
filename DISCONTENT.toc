@@ -1,0 +1,23 @@
+## Interface: 120001
+## Title: DISCONTENT
+## Notes: Gildenaddon mit News, Raid-Prep und Tools für DISCONTENT
+## Author: Steffen
+## Version: 0.8
+## SavedVariables: DISCONTENTDB
+
+LibStub\LibStub.lua
+CallbackHandler-1.0\CallbackHandler-1.0.lua
+LibDataBroker-1.1\LibDataBroker-1.1.lua
+LibDBIcon-1.0\LibDBIcon-1.0.lua
+DISCONTENT.lua
+DISCONTENT_News.lua
+DISCONTENT_GuildNews.lua
+DISCONTENT_Overview.lua
+DISCONTENT_GuildChat.lua
+DISCONTENT_Professions.lua
+DISCONTENT_RaidPrep.lua
+DISCONTENT_Settings.lua
+DISCONTENT_gear.lua
+DISCONTENT_Notes.lua
+DISCONTENT_Officer.lua
+DISCONTENT_MythicPlus.lua
