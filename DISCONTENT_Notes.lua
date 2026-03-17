@@ -760,9 +760,206 @@ function DISCONTENT:GetNotesProgress()
     return done, total
 end
 
+function DISCONTENT:GetNoteRowFromDragTarget(frame)
+    while frame do
+        if frame.noteDragRow then
+            return frame.noteDragRow
+        end
+
+        if type(frame.GetParent) ~= "function" then
+            break
+        end
+
+        frame = frame:GetParent()
+    end
+
+    return nil
+end
+
+function DISCONTENT:GetNoteRowUnderCursor()
+    if type(GetCursorPosition) ~= "function" then
+        return nil
+    end
+
+    local cursorX, cursorY = GetCursorPosition()
+    cursorX = tonumber(cursorX) or 0
+    cursorY = tonumber(cursorY) or 0
+
+    local function FindRow(rows)
+        if type(rows) ~= "table" then
+            return nil
+        end
+
+        for i = 1, #rows do
+            local row = rows[i]
+            if row and row:IsShown() and row.GetLeft and row.GetRight and row.GetTop and row.GetBottom then
+                local scale = (row.GetEffectiveScale and row:GetEffectiveScale()) or 1
+                if scale == 0 then
+                    scale = 1
+                end
+
+                local x = cursorX / scale
+                local y = cursorY / scale
+                local left = row:GetLeft()
+                local right = row:GetRight()
+                local top = row:GetTop()
+                local bottom = row:GetBottom()
+
+                if left and right and top and bottom and x >= left and x <= right and y <= top and y >= bottom then
+                    return row
+                end
+            end
+        end
+
+        return nil
+    end
+
+    return FindRow(self.noteRows)
+        or (self.notesPopoutFrame and self.notesPopoutFrame.rows and FindRow(self.notesPopoutFrame.rows))
+        or nil
+end
+
+function DISCONTENT:SetNoteDragHoverRow(row)
+    if self.noteDragHoverRow and self.noteDragHoverRow ~= row and self.noteDragHoverRow.dragHighlight then
+        self.noteDragHoverRow.dragHighlight:Hide()
+    end
+
+    self.noteDragHoverRow = row
+
+    if row and self.noteDragContext and row ~= self.noteDragContext.sourceRow and row.dragHighlight then
+        row.dragHighlight:Show()
+    end
+end
+
+function DISCONTENT:ClearNoteDragState()
+    if self.noteDragHoverRow and self.noteDragHoverRow.dragHighlight then
+        self.noteDragHoverRow.dragHighlight:Hide()
+    end
+
+    if self.noteDragSourceRow and self.noteDragSourceRow.dragSourceHighlight then
+        self.noteDragSourceRow.dragSourceHighlight:Hide()
+    end
+
+    self.noteDragHoverRow = nil
+    self.noteDragSourceRow = nil
+    self.noteDragContext = nil
+end
+
+function DISCONTENT:StartNoteRowDrag(actualIndex, row)
+    actualIndex = tonumber(actualIndex)
+    if not actualIndex or actualIndex < 1 then
+        return false
+    end
+
+    self:ClearNoteDragState()
+
+    self.noteDragContext = {
+        sourceIndex = actualIndex,
+        sourceRow = row,
+    }
+    self.noteDragSourceRow = row
+
+    if row and row.dragSourceHighlight then
+        row.dragSourceHighlight:Show()
+    end
+
+    return true
+end
+
+function DISCONTENT:MoveNoteItem(sourceIndex, targetIndex, insertAfter)
+    local items = self:GetNotesItems()
+
+    sourceIndex = tonumber(sourceIndex)
+    targetIndex = tonumber(targetIndex)
+
+    if not sourceIndex or not targetIndex or not items[sourceIndex] or not items[targetIndex] then
+        return false
+    end
+
+    local destinationIndex = insertAfter and (targetIndex + 1) or targetIndex
+    if destinationIndex > sourceIndex then
+        destinationIndex = destinationIndex - 1
+    end
+
+    destinationIndex = math.max(1, math.min(destinationIndex, #items))
+
+    if destinationIndex == sourceIndex then
+        return false
+    end
+
+    local entry = table.remove(items, sourceIndex)
+    if not entry then
+        return false
+    end
+
+    table.insert(items, destinationIndex, entry)
+
+    if type(self.editingNoteIndex) == "number" then
+        if self.editingNoteIndex == sourceIndex then
+            self.editingNoteIndex = destinationIndex
+        elseif destinationIndex < sourceIndex then
+            if self.editingNoteIndex >= destinationIndex and self.editingNoteIndex < sourceIndex then
+                self.editingNoteIndex = self.editingNoteIndex + 1
+            end
+        else
+            if self.editingNoteIndex > sourceIndex and self.editingNoteIndex <= destinationIndex then
+                self.editingNoteIndex = self.editingNoteIndex - 1
+            end
+        end
+    end
+
+    local notesDb = self:GetNotesDB()
+    notesDb.updatedAt = time()
+
+    self:SaveSettings()
+    self:RefreshNotesUI()
+    return true
+end
+
+function DISCONTENT:FinishNoteRowDrag(mouseFocus)
+    local context = self.noteDragContext
+    if not context then
+        return false
+    end
+
+    local targetRow = self.noteDragHoverRow or self:GetNoteRowFromDragTarget(mouseFocus) or self:GetNoteRowUnderCursor()
+    local moved = false
+
+    if targetRow then
+        local targetIndex = tonumber(targetRow.noteIndex or targetRow.index)
+        if targetIndex then
+            local insertAfter = false
+
+            if type(GetCursorPosition) == "function" and targetRow.GetTop and targetRow.GetBottom then
+                local _, cursorY = GetCursorPosition()
+                local scale = (targetRow.GetEffectiveScale and targetRow:GetEffectiveScale()) or 1
+                if scale == 0 then
+                    scale = 1
+                end
+                cursorY = (tonumber(cursorY) or 0) / scale
+
+                local topY = targetRow:GetTop()
+                local bottomY = targetRow:GetBottom()
+                if topY and bottomY then
+                    insertAfter = cursorY < ((topY + bottomY) / 2)
+                end
+            end
+
+            moved = self:MoveNoteItem(context.sourceIndex, targetIndex, insertAfter)
+        end
+    end
+
+    self:ClearNoteDragState()
+    return moved
+end
+
+
+
 function DISCONTENT:CreateNoteRow(parent, index)
     local row = CreateFrame("Frame", nil, parent)
     row:SetHeight(28)
+    row:EnableMouse(true)
+    row.noteDragRow = row
 
     if index % 2 == 0 then
         row.bg = row:CreateTexture(nil, "BACKGROUND")
@@ -770,8 +967,44 @@ function DISCONTENT:CreateNoteRow(parent, index)
         row.bg:SetColorTexture(1, 1, 1, 0.03)
     end
 
+    row.dragSourceHighlight = row:CreateTexture(nil, "ARTWORK")
+    row.dragSourceHighlight:SetAllPoints()
+    row.dragSourceHighlight:SetColorTexture(0.2, 0.8, 1, 0.08)
+    row.dragSourceHighlight:Hide()
+
+    row.dragHighlight = row:CreateTexture(nil, "ARTWORK")
+    row.dragHighlight:SetAllPoints()
+    row.dragHighlight:SetColorTexture(0.2, 0.8, 1, 0.16)
+    row.dragHighlight:Hide()
+
     row.checkbox = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
     row.checkbox:SetSize(24, 24)
+
+    row.dragHandle = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.dragHandle:SetSize(42, 20)
+    row.dragHandle:SetText("Drag")
+    row.dragHandle.noteDragRow = row
+    row.dragHandle:RegisterForDrag("LeftButton")
+    row.dragHandle:SetScript("OnDragStart", function()
+        if row.index then
+            DISCONTENT:StartNoteRowDrag(row.index, row)
+        end
+    end)
+    row.dragHandle:SetScript("OnDragStop", function()
+        DISCONTENT:FinishNoteRowDrag()
+    end)
+    row.dragHandle:SetScript("OnEnter", function(button)
+        if GameTooltip then
+            GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Ziehen zum Umordnen", 1, 0.82, 0, 1)
+            GameTooltip:Show()
+        end
+    end)
+    row.dragHandle:SetScript("OnLeave", function()
+        if GameTooltip then
+            GameTooltip:Hide()
+        end
+    end)
 
     row.text = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.text:SetJustifyH("LEFT")
@@ -790,6 +1023,18 @@ function DISCONTENT:CreateNoteRow(parent, index)
     row.deleteButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.deleteButton:SetSize(26, 20)
     row.deleteButton:SetText("X")
+
+    row:SetScript("OnEnter", function(frame)
+        if DISCONTENT.noteDragContext and DISCONTENT.noteDragContext.sourceRow ~= frame then
+            DISCONTENT:SetNoteDragHoverRow(frame)
+        end
+    end)
+
+    row:SetScript("OnLeave", function(frame)
+        if DISCONTENT.noteDragHoverRow == frame then
+            DISCONTENT:SetNoteDragHoverRow(nil)
+        end
+    end)
 
     row.checkbox:SetScript("OnClick", function(btn)
         if row.index then
@@ -812,6 +1057,8 @@ function DISCONTENT:CreateNoteRow(parent, index)
     return row
 end
 
+
+
 function DISCONTENT:RefreshNotesUI()
     if not self.uiCreated or not self.notesTabContent then
         return
@@ -832,7 +1079,7 @@ function DISCONTENT:RefreshNotesUI()
             self.notesStatusText:SetText("Noch keine Einträge vorhanden.")
             self.notesStatusText:SetTextColor(0.8, 0.8, 0.8, 1)
         else
-            self.notesStatusText:SetText(done .. " / " .. total .. " erledigt")
+            self.notesStatusText:SetText(done .. " / " .. total .. " erledigt | Drag-Handle ziehen zum Umordnen")
             if done == total then
                 self.notesStatusText:SetTextColor(0.2, 0.85, 0.2, 1)
             elseif done > 0 then
@@ -844,6 +1091,7 @@ function DISCONTENT:RefreshNotesUI()
     end
 
     local width = math.max(300, (self.notesScrollFrame:GetWidth() or 700) - 28)
+    local textWidth = math.max(120, width - 186)
     local yOffset = 0
 
     for i = 1, #items do
@@ -855,6 +1103,7 @@ function DISCONTENT:RefreshNotesUI()
 
         local entry = items[i]
         row.index = i
+        row.noteIndex = i
 
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", self.notesScrollChild, "TOPLEFT", 0, -yOffset)
@@ -864,6 +1113,9 @@ function DISCONTENT:RefreshNotesUI()
         row.checkbox:SetPoint("TOPLEFT", row, "TOPLEFT", 2, -2)
         row.checkbox:SetChecked(entry.done and true or false)
 
+        row.dragHandle:ClearAllPoints()
+        row.dragHandle:SetPoint("TOPLEFT", row, "TOPLEFT", 28, -3)
+
         row.deleteButton:ClearAllPoints()
         row.deleteButton:SetPoint("TOPRIGHT", row, "TOPRIGHT", -2, -2)
 
@@ -871,8 +1123,8 @@ function DISCONTENT:RefreshNotesUI()
         row.editButton:SetPoint("RIGHT", row.deleteButton, "LEFT", -6, 0)
 
         row.text:ClearAllPoints()
-        row.text:SetPoint("TOPLEFT", row, "TOPLEFT", 34, -5)
-        row.text:SetWidth(width - 140)
+        row.text:SetPoint("TOPLEFT", row, "TOPLEFT", 76, -5)
+        row.text:SetWidth(textWidth)
         row.text:SetText(entry.text or "")
 
         local reminderText = self:GetNoteReminderText(entry)
@@ -897,7 +1149,7 @@ function DISCONTENT:RefreshNotesUI()
             row.meta:Show()
             row.meta:ClearAllPoints()
             row.meta:SetPoint("TOPLEFT", row.text, "BOTTOMLEFT", 0, -4)
-            row.meta:SetWidth(width - 140)
+            row.meta:SetWidth(textWidth)
             row.meta:SetText(reminderText)
             row.meta:SetTextColor(metaColorR, metaColorG, metaColorB, 1)
 
@@ -916,6 +1168,7 @@ function DISCONTENT:RefreshNotesUI()
     for i = #items + 1, #self.noteRows do
         self.noteRows[i]:Hide()
         self.noteRows[i].index = nil
+        self.noteRows[i].noteIndex = nil
     end
 
     self.notesScrollChild:SetSize(width, math.max(yOffset + 8, self.notesScrollFrame:GetHeight() or 100))
@@ -924,6 +1177,8 @@ function DISCONTENT:RefreshNotesUI()
         self:RefreshNotesPopout()
     end
 end
+
+
 
 function DISCONTENT:GetNotesPopoutPositionDB()
     self.db = self.db or _G.DISCONTENTDB or {}
@@ -1230,12 +1485,50 @@ end
 function DISCONTENT:CreateNotesPopoutRow(parent, index)
     local row = CreateFrame("Frame", nil, parent)
     row:SetHeight(34)
+    row:EnableMouse(true)
+    row.noteDragRow = row
 
     if index % 2 == 0 then
         row.bg = row:CreateTexture(nil, "BACKGROUND")
         row.bg:SetAllPoints()
         row.bg:SetColorTexture(1, 1, 1, 0.035)
     end
+
+    row.dragSourceHighlight = row:CreateTexture(nil, "ARTWORK")
+    row.dragSourceHighlight:SetAllPoints()
+    row.dragSourceHighlight:SetColorTexture(0.2, 0.8, 1, 0.08)
+    row.dragSourceHighlight:Hide()
+
+    row.dragHighlight = row:CreateTexture(nil, "ARTWORK")
+    row.dragHighlight:SetAllPoints()
+    row.dragHighlight:SetColorTexture(0.2, 0.8, 1, 0.16)
+    row.dragHighlight:Hide()
+
+    row.dragHandle = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.dragHandle:SetSize(42, 20)
+    row.dragHandle:SetText("Drag")
+    row.dragHandle.noteDragRow = row
+    row.dragHandle:RegisterForDrag("LeftButton")
+    row.dragHandle:SetScript("OnDragStart", function()
+        if row.noteIndex then
+            DISCONTENT:StartNoteRowDrag(row.noteIndex, row)
+        end
+    end)
+    row.dragHandle:SetScript("OnDragStop", function()
+        DISCONTENT:FinishNoteRowDrag()
+    end)
+    row.dragHandle:SetScript("OnEnter", function(button)
+        if GameTooltip then
+            GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Ziehen zum Umordnen", 1, 0.82, 0, 1)
+            GameTooltip:Show()
+        end
+    end)
+    row.dragHandle:SetScript("OnLeave", function()
+        if GameTooltip then
+            GameTooltip:Hide()
+        end
+    end)
 
     row.text = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.text:SetJustifyH("LEFT")
@@ -1255,6 +1548,18 @@ function DISCONTENT:CreateNotesPopoutRow(parent, index)
     row.doneButton:SetSize(96, 20)
     row.doneButton:SetText("Abschließen")
 
+    row:SetScript("OnEnter", function(frame)
+        if DISCONTENT.noteDragContext and DISCONTENT.noteDragContext.sourceRow ~= frame then
+            DISCONTENT:SetNoteDragHoverRow(frame)
+        end
+    end)
+
+    row:SetScript("OnLeave", function(frame)
+        if DISCONTENT.noteDragHoverRow == frame then
+            DISCONTENT:SetNoteDragHoverRow(nil)
+        end
+    end)
+
     row.editButton:SetScript("OnClick", function()
         if row.noteIndex then
             DISCONTENT:EditNoteFromPopout(row.noteIndex)
@@ -1269,6 +1574,8 @@ function DISCONTENT:CreateNotesPopoutRow(parent, index)
 
     return row
 end
+
+
 
 function DISCONTENT:CreateNotesPopout()
     if self.notesPopoutFrame then
@@ -1498,7 +1805,7 @@ function DISCONTENT:RefreshNotesPopout()
     local _, totalCount = self:GetNotesProgress()
 
     if popup.statusText then
-        popup.statusText:SetText("Offene Notizen: " .. openCount .. " / " .. totalCount)
+        popup.statusText:SetText("Offene Notizen: " .. openCount .. " / " .. totalCount .. " | Drag-Handle ziehen zum Umordnen")
         if openCount > 0 then
             popup.statusText:SetTextColor(1, 0.82, 0, 1)
         else
@@ -1507,6 +1814,7 @@ function DISCONTENT:RefreshNotesPopout()
     end
 
     local width = math.max(250, (popup.scrollFrame:GetWidth() or 360) - 24)
+    local textWidth = math.max(90, width - 216)
     local yOffset = 0
 
     if openCount == 0 then
@@ -1528,6 +1836,7 @@ function DISCONTENT:RefreshNotesPopout()
         local reminderText = self:GetNoteReminderText(entry)
 
         row.noteIndex = noteInfo.index
+        row.index = noteInfo.index
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", popup.scrollChild, "TOPLEFT", 0, -yOffset)
         row:SetWidth(width)
@@ -1538,9 +1847,12 @@ function DISCONTENT:RefreshNotesPopout()
         row.editButton:ClearAllPoints()
         row.editButton:SetPoint("RIGHT", row.doneButton, "LEFT", -6, 0)
 
+        row.dragHandle:ClearAllPoints()
+        row.dragHandle:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -3)
+
         row.text:ClearAllPoints()
-        row.text:SetPoint("TOPLEFT", row, "TOPLEFT", 6, -5)
-        row.text:SetWidth(width - 168)
+        row.text:SetPoint("TOPLEFT", row, "TOPLEFT", 52, -5)
+        row.text:SetWidth(textWidth)
         row.text:SetText(entry.text or "")
         row.text:SetTextColor(1, 0.82, 0, 1)
 
@@ -1551,7 +1863,7 @@ function DISCONTENT:RefreshNotesPopout()
             row.meta:Show()
             row.meta:ClearAllPoints()
             row.meta:SetPoint("TOPLEFT", row.text, "BOTTOMLEFT", 0, -4)
-            row.meta:SetWidth(width - 168)
+            row.meta:SetWidth(textWidth)
             row.meta:SetText(reminderText)
             if entry.reminderFiredAt then
                 row.meta:SetTextColor(1, 0.82, 0, 1)
@@ -1574,10 +1886,13 @@ function DISCONTENT:RefreshNotesPopout()
     for i = openCount + 1, #popup.rows do
         popup.rows[i]:Hide()
         popup.rows[i].noteIndex = nil
+        popup.rows[i].index = nil
     end
 
-    popup.scrollChild:SetSize(width, math.max(yOffset + 8, popup.scrollFrame:GetHeight() or 100))
+    popup.scrollChild:SetSize(width, math.max(yOffset + 8, popup.scrollFrame:GetHeight() or 120))
 end
+
+
 
 function DISCONTENT:CreateNoteReminderPopup()
     if self.noteReminderPopup then

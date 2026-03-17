@@ -32,7 +32,7 @@ DISCONTENT.pendingBackgroundAlpha = 0.88
 DISCONTENT.activeTab = "guildnews"
 DISCONTENT.maxChatMessages = 80
 
-DISCONTENT.addonVersion = "1.0"
+DISCONTENT.addonVersion = "1.0.1"
 DISCONTENT.defaultWelcomeWidth = 430
 DISCONTENT.defaultWelcomeHeight = 285
 DISCONTENT.professionSyncPrefix = "DISCPROF"
@@ -42,6 +42,7 @@ DISCONTENT.pushMessagePrefix = "DISCPUSH"
 DISCONTENT.newsSyncPrefix = "DISCNEWS"
 DISCONTENT.defaultMinimapAngle = 220
 DISCONTENT.defaultShowMinimapButton = true
+DISCONTENT.defaultShowWelcomePopup = true
 
 DISCONTENT.professions = {}
 DISCONTENT.professionRows = {}
@@ -187,6 +188,10 @@ function DISCONTENT:InitializeDB()
     self.db.showMinimapButton = not minimap.hide
     self.db.minimapButtonAngle = minimap.minimapPos
 
+    if type(self.db.showWelcomePopup) ~= "boolean" then
+        self.db.showWelcomePopup = self.defaultShowWelcomePopup ~= false
+    end
+
     if type(self.db.professions) ~= "table" then
         self.db.professions = {}
     end
@@ -282,6 +287,7 @@ function DISCONTENT:SaveSettings()
     self.db = _G.DISCONTENTDB
     self.db.uiScaleValue = self.uiScaleValue
     self.db.backgroundAlpha = self.backgroundAlpha
+    self.db.showWelcomePopup = self:GetWelcomePopupEnabled()
 
     local minimap = self:EnsureMinimapDB()
     minimap.hide = self.db.showMinimapButton == false
@@ -658,6 +664,37 @@ end
 
 function DISCONTENT:CreateMinimapButton()
     self:RegisterMinimapIcon()
+end
+
+function DISCONTENT:GetWelcomePopupEnabled()
+    if not self.db then
+        return self.defaultShowWelcomePopup ~= false
+    end
+
+    if type(self.db.showWelcomePopup) ~= "boolean" then
+        self.db.showWelcomePopup = self.defaultShowWelcomePopup ~= false
+    end
+
+    return self.db.showWelcomePopup ~= false
+end
+
+function DISCONTENT:SetWelcomePopupEnabled(enabled)
+    if type(_G.DISCONTENTDB) ~= "table" then
+        _G.DISCONTENTDB = {}
+    end
+
+    self.db = _G.DISCONTENTDB
+    self.db.showWelcomePopup = enabled and true or false
+
+    if self.welcomePopupToggleCheckbox then
+        self.welcomePopupToggleCheckbox:SetChecked(self.db.showWelcomePopup)
+    end
+
+    if self.db.showWelcomePopup == false and self.welcomeFrame and self.welcomeFrame:IsShown() then
+        self.welcomeFrame:Hide()
+    end
+
+    self:SaveSettings()
 end
 
 function DISCONTENT:CreateMinimapSettingsToggle()
@@ -3002,10 +3039,16 @@ DISCONTENT:SetScript("OnEvent", function(self, event, ...)
             end)
         end
 
-        if self.ShowWelcomeWindow then
+        if self.GetWelcomePopupEnabled and self:GetWelcomePopupEnabled() and self.ShowWelcomeWindow then
             C_Timer.After(1.8, function()
-                if DISCONTENT and DISCONTENT.ShowWelcomeWindow then
+                if DISCONTENT and DISCONTENT.GetWelcomePopupEnabled and DISCONTENT:GetWelcomePopupEnabled() and DISCONTENT.ShowWelcomeWindow then
                     DISCONTENT:ShowWelcomeWindow()
+                end
+            end)
+        elseif self.TryShowWelcomeForUnreadNews then
+            C_Timer.After(1.8, function()
+                if DISCONTENT and DISCONTENT.TryShowWelcomeForUnreadNews then
+                    DISCONTENT:TryShowWelcomeForUnreadNews()
                 end
             end)
         end
