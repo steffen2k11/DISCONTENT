@@ -123,6 +123,11 @@ function DISCONTENT:CreateOverviewUI()
         C_GuildInfo.GuildRoster()
     end)
 
+    self.ilvlHintText = self.overviewTabContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    self.ilvlHintText:SetJustifyH("RIGHT")
+    self.ilvlHintText:SetTextColor(1, 0.82, 0, 0.9)
+    self.ilvlHintText:SetText("Tipp: Klick auf das Itemlevel öffnet den Live-Inspect des aktuellen Gearstands.")
+
     self.nameHeader = self:CreateHeaderButton(
         self.overviewTabContent, "Name", 180,
         "TOPLEFT", self.overviewTabContent, "TOPLEFT", 16, -52,
@@ -328,8 +333,8 @@ function DISCONTENT:EnsureRowCount()
         end)
         row.ilvlButton:SetScript("OnEnter", function(btn)
             GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
-            GameTooltip:SetText("Geardetails öffnen")
-            GameTooltip:AddLine("Klick zeigt alle bekannten Items, iLvl, Enchants und Gems.", 1, 1, 1, true)
+            GameTooltip:SetText("Live-Inspect öffnen")
+            GameTooltip:AddLine("Klick zeigt den aktuell bekannten Gearstand mit Items, iLvl, Enchants und Gems.", 1, 1, 1, true)
             GameTooltip:Show()
 
             if row.ilvlText then
@@ -583,6 +588,11 @@ function DISCONTENT:UpdateOverviewLayout()
 
     self.refreshButton:ClearAllPoints()
     self.refreshButton:SetPoint("TOPRIGHT", self.overviewTabContent, "TOPRIGHT", -18, -8)
+
+    self.ilvlHintText:ClearAllPoints()
+    self.ilvlHintText:SetPoint("RIGHT", self.refreshButton, "LEFT", -14, 0)
+    self.ilvlHintText:SetWidth(math.max(200, layout.usableWidth - 540))
+    self.ilvlHintText:SetHeight(16)
 
     self.separator:ClearAllPoints()
     self.separator:SetPoint("TOPLEFT", self.overviewTabContent, "TOPLEFT", layout.leftMargin, -72)

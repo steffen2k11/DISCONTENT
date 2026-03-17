@@ -32,9 +32,9 @@ DISCONTENT.pendingBackgroundAlpha = 0.88
 DISCONTENT.activeTab = "guildnews"
 DISCONTENT.maxChatMessages = 80
 
-DISCONTENT.addonVersion = "0.8"
-DISCONTENT.defaultWelcomeWidth = 560
-DISCONTENT.defaultWelcomeHeight = 380
+DISCONTENT.addonVersion = "1.0"
+DISCONTENT.defaultWelcomeWidth = 430
+DISCONTENT.defaultWelcomeHeight = 285
 DISCONTENT.professionSyncPrefix = "DISCPROF"
 DISCONTENT.raidPrepSyncPrefix = "DISCRPREP"
 DISCONTENT.mythicPlusPrefix = "DISCMPLUS"
@@ -524,20 +524,31 @@ function DISCONTENT:UpdateMinimapButtonPosition()
 end
 
 function DISCONTENT:RefreshMinimapButtonVisibility()
-    if not self.libDBIcon or not self.minimapDataObject then
-        return
-    end
-
-    local name = self:GetMinimapObjectName()
     local minimap = self:EnsureMinimapDB()
+    local name = self:GetMinimapObjectName()
 
-    if minimap.hide then
-        self.libDBIcon:Hide(name)
-    else
-        self.libDBIcon:Show(name)
+    if self.libDBIcon and self.minimapDataObject then
+        if minimap.hide then
+            self.libDBIcon:Hide(name)
+        else
+            self.libDBIcon:Show(name)
+            self.libDBIcon:Refresh(name, minimap)
+        end
     end
 
     self.minimapButton = _G["LibDBIcon10_" .. name] or self.minimapButton
+
+    if self.minimapButton then
+        if minimap.hide then
+            self.minimapButton:Hide()
+        else
+            self.minimapButton:Show()
+            self.minimapButton:SetAlpha(1)
+            self.minimapButton:EnableMouse(true)
+            self.minimapButton:SetFrameStrata("MEDIUM")
+            self.minimapButton:SetFrameLevel(8)
+        end
+    end
 
     if self.minimapToggleCheckbox then
         self.minimapToggleCheckbox:SetChecked(not minimap.hide)
@@ -545,13 +556,14 @@ function DISCONTENT:RefreshMinimapButtonVisibility()
 end
 
 function DISCONTENT:SetMinimapButtonEnabled(enabled)
+    local shouldShow = enabled and true or false
     local minimap = self:EnsureMinimapDB()
-    minimap.hide = enabled and false or true
-    self.db.showMinimapButton = enabled and true or false
-    self.db.minimapButtonAngle = minimap.minimapPos
+    minimap.hide = not shouldShow
+    self.db.showMinimapButton = shouldShow
+    self.db.minimapButtonAngle = tonumber(minimap.minimapPos) or self.defaultMinimapAngle
 
     if self.minimapToggleCheckbox then
-        self.minimapToggleCheckbox:SetChecked(enabled and true or false)
+        self.minimapToggleCheckbox:SetChecked(shouldShow)
     end
 
     self:SaveSettings()
@@ -681,7 +693,8 @@ function DISCONTENT:CreateMinimapSettingsToggle()
     local minimap = self:EnsureMinimapDB()
     check:SetChecked(not minimap.hide)
     check:SetScript("OnClick", function(frame)
-        DISCONTENT:SetMinimapButtonEnabled(frame:GetChecked())
+        local shouldShow = frame:GetChecked() and true or false
+        DISCONTENT:SetMinimapButtonEnabled(shouldShow)
     end)
 end
 
@@ -1539,7 +1552,7 @@ function DISCONTENT:CreateWelcomeNewsCard(parent)
     card.accent = card:CreateTexture(nil, "ARTWORK")
     card.accent:SetPoint("TOPLEFT", 1, -1)
     card.accent:SetPoint("TOPRIGHT", -1, -1)
-    card.accent:SetHeight(3)
+    card.accent:SetHeight(2)
     card.accent:SetColorTexture(0.93, 0.77, 0.17, 0.95)
 
     card.hoverGlow = card:CreateTexture(nil, "HIGHLIGHT")
@@ -1547,15 +1560,15 @@ function DISCONTENT:CreateWelcomeNewsCard(parent)
     card.hoverGlow:SetColorTexture(1, 1, 1, 0.04)
 
     card.badge = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    card.badge:SetPoint("TOPRIGHT", card, "TOPRIGHT", -12, -10)
+    card.badge:SetPoint("TOPRIGHT", card, "TOPRIGHT", -10, -8)
     card.badge:SetJustifyH("RIGHT")
     card.badge:SetText("WICHTIG")
     card.badge:SetTextColor(1, 0.82, 0.22, 1)
     card.badge:Hide()
 
-    card.header = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    card.header:SetPoint("TOPLEFT", 14, -10)
-    card.header:SetPoint("TOPRIGHT", card.badge, "TOPLEFT", -10, 0)
+    card.header = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    card.header:SetPoint("TOPLEFT", 10, -8)
+    card.header:SetPoint("TOPRIGHT", card.badge, "TOPLEFT", -8, 0)
     card.header:SetJustifyH("LEFT")
     card.header:SetJustifyV("TOP")
     card.header:SetWordWrap(true)
@@ -1563,19 +1576,19 @@ function DISCONTENT:CreateWelcomeNewsCard(parent)
 
     card.meta = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     card.meta:SetPoint("TOPLEFT", card.header, "BOTTOMLEFT", 0, -4)
-    card.meta:SetPoint("TOPRIGHT", card, "TOPRIGHT", -14, -30)
+    card.meta:SetPoint("TOPRIGHT", card, "TOPRIGHT", -10, -24)
     card.meta:SetJustifyH("LEFT")
     card.meta:SetJustifyV("TOP")
     card.meta:SetWordWrap(true)
     card.meta:SetTextColor(0.72, 0.76, 0.82, 1)
 
-    card.message = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    card.message = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     card.message:SetPoint("TOPLEFT", card.meta, "BOTTOMLEFT", 0, -8)
-    card.message:SetPoint("TOPRIGHT", card, "TOPRIGHT", -14, -8)
+    card.message:SetPoint("TOPRIGHT", card, "TOPRIGHT", -10, -8)
     card.message:SetJustifyH("LEFT")
     card.message:SetJustifyV("TOP")
     card.message:SetWordWrap(true)
-    card.message:SetSpacing(2)
+    card.message:SetSpacing(1)
     card.message:SetTextColor(0.95, 0.95, 0.95, 1)
 
     card:SetScript("OnEnter", function(frame)
@@ -1638,7 +1651,7 @@ function DISCONTENT:RefreshWelcomeNewsView()
         if unreadCount > 0 then
             self.welcomeFrame.subtitle:SetText("Es gibt " .. tostring(unreadCount) .. " neue News, die du noch nicht gesehen hast.")
         else
-            self.welcomeFrame.subtitle:SetText("Alle News wurden bereits angezeigt. Über das Addon oder das Minimap-Icon kannst du sie jederzeit erneut öffnen.")
+            self.welcomeFrame.subtitle:SetText("")
         end
     end
 
@@ -1652,7 +1665,7 @@ function DISCONTENT:RefreshWelcomeNewsView()
     local child = self.welcomeFrame.scrollChild
     local panelWidth = math.max(100, self.welcomeFrame.newsPanel:GetWidth() - 34)
     local cardWidth = panelWidth - 8
-    local spacing = 10
+    local spacing = 6
     local cards = self.welcomeFrame.newsCards or {}
 
     self.welcomeFrame.newsCards = cards
@@ -1697,9 +1710,9 @@ function DISCONTENT:RefreshWelcomeNewsView()
         end
 
         card:SetWidth(cardWidth)
-        card.header:SetWidth(cardWidth - 120)
-        card.meta:SetWidth(cardWidth - 28)
-        card.message:SetWidth(cardWidth - 28)
+        card.header:SetWidth(cardWidth - 96)
+        card.meta:SetWidth(cardWidth - 20)
+        card.message:SetWidth(cardWidth - 20)
 
         card.header:SetText(self:GetNewsTitleText(entry))
         card.meta:SetText(metaText ~= "" and metaText or " ")
@@ -1707,10 +1720,10 @@ function DISCONTENT:RefreshWelcomeNewsView()
 
         self:ApplyWelcomeNewsCardStyle(card, entry, false)
 
-        local headerHeight = math.max(18, card.header:GetStringHeight() or 18)
-        local metaHeight = math.max(12, card.meta:GetStringHeight() or 12)
-        local messageHeight = math.max(20, card.message:GetStringHeight() or 20)
-        local cardHeight = math.max(96, 18 + headerHeight + 6 + metaHeight + 10 + messageHeight + 16)
+        local headerHeight = math.max(14, card.header:GetStringHeight() or 14)
+        local metaHeight = math.max(10, card.meta:GetStringHeight() or 10)
+        local messageHeight = math.max(16, card.message:GetStringHeight() or 16)
+        local cardHeight = math.max(72, 12 + headerHeight + 4 + metaHeight + 6 + messageHeight + 12)
 
         card:SetHeight(cardHeight)
         card:Show()
@@ -1753,6 +1766,7 @@ function DISCONTENT:CreateWelcomeUI()
 
     frame:SetSize(self.defaultWelcomeWidth, self.defaultWelcomeHeight)
     frame:SetFrameStrata("FULLSCREEN_DIALOG")
+    frame:SetFrameLevel(math.max((self.GetFrameLevel and self:GetFrameLevel() or 1) + 200, 500))
     frame:SetToplevel(true)
     frame:SetClampedToScreen(true)
     frame:SetMovable(true)
@@ -1777,13 +1791,13 @@ function DISCONTENT:CreateWelcomeUI()
     frame.topAccent = frame:CreateTexture(nil, "ARTWORK")
     frame.topAccent:SetPoint("TOPLEFT", 1, -1)
     frame.topAccent:SetPoint("TOPRIGHT", -1, -1)
-    frame.topAccent:SetHeight(3)
+    frame.topAccent:SetHeight(2)
     frame.topAccent:SetColorTexture(0.93, 0.77, 0.17, 0.95)
 
     frame.innerGlow = frame:CreateTexture(nil, "BORDER")
-    frame.innerGlow:SetPoint("TOPLEFT", 14, -14)
-    frame.innerGlow:SetPoint("TOPRIGHT", -14, -14)
-    frame.innerGlow:SetHeight(70)
+    frame.innerGlow:SetPoint("TOPLEFT", 12, -12)
+    frame.innerGlow:SetPoint("TOPRIGHT", -12, -12)
+    frame.innerGlow:SetHeight(46)
     frame.innerGlow:SetColorTexture(0.15, 0.18, 0.24, 0.45)
 
     frame.border = CreateFrame("Frame", nil, frame, "BackdropTemplate")
@@ -1797,25 +1811,25 @@ function DISCONTENT:CreateWelcomeUI()
     frame.closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     frame.closeButton:SetPoint("TOPRIGHT", -4, -4)
 
-    frame.versionText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.versionText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     frame.versionText:SetPoint("RIGHT", frame.closeButton, "LEFT", -6, 1)
     frame.versionText:SetText(self:GetVersionLabel())
     frame.versionText:SetTextColor(0.75, 0.75, 0.75, 1)
 
-    frame.welcomeLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    frame.welcomeLabel:SetPoint("TOPLEFT", 18, -16)
+    frame.welcomeLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    frame.welcomeLabel:SetPoint("TOPLEFT", 14, -12)
     frame.welcomeLabel:SetJustifyH("LEFT")
     frame.welcomeLabel:SetText("Willkommen bei DISCONTENT")
 
-    frame.subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    frame.subtitle:SetPoint("TOPLEFT", frame.welcomeLabel, "BOTTOMLEFT", 0, -8)
-    frame.subtitle:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -20, -24)
+    frame.subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.subtitle:SetPoint("TOPLEFT", frame.welcomeLabel, "BOTTOMLEFT", 0, -5)
+    frame.subtitle:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -16, -18)
     frame.subtitle:SetJustifyH("LEFT")
     frame.subtitle:SetText("")
 
     frame.newsPanel = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    frame.newsPanel:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -84)
-    frame.newsPanel:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -16, 56)
+    frame.newsPanel:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -58)
+    frame.newsPanel:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 42)
     frame.newsPanel:SetBackdrop({
         bgFile = "Interface/Tooltips/UI-Tooltip-Background",
         edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -1825,19 +1839,19 @@ function DISCONTENT:CreateWelcomeUI()
     frame.newsPanel:SetBackdropColor(0.04, 0.05, 0.07, 0.92)
     frame.newsPanel:SetBackdropBorderColor(0.35, 0.39, 0.46, 0.95)
 
-    frame.sectionTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    frame.sectionTitle:SetPoint("BOTTOMLEFT", frame.newsPanel, "TOPLEFT", 2, 8)
+    frame.sectionTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.sectionTitle:SetPoint("BOTTOMLEFT", frame.newsPanel, "TOPLEFT", 2, 5)
     frame.sectionTitle:SetText("Aktuelle News")
 
     frame.scrollFrame = CreateFrame("ScrollFrame", "DISCONTENTWelcomeScrollFrame", frame.newsPanel, "UIPanelScrollFrameTemplate")
-    frame.scrollFrame:SetPoint("TOPLEFT", frame.newsPanel, "TOPLEFT", 8, -8)
-    frame.scrollFrame:SetPoint("BOTTOMRIGHT", frame.newsPanel, "BOTTOMRIGHT", -26, 8)
+    frame.scrollFrame:SetPoint("TOPLEFT", frame.newsPanel, "TOPLEFT", 6, -6)
+    frame.scrollFrame:SetPoint("BOTTOMRIGHT", frame.newsPanel, "BOTTOMRIGHT", -24, 6)
 
     frame.scrollChild = CreateFrame("Frame", nil, frame.scrollFrame)
     frame.scrollChild:SetSize(1, 1)
     frame.scrollFrame:SetScrollChild(frame.scrollChild)
 
-    frame.emptyState = frame.scrollChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    frame.emptyState = frame.scrollChild:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     frame.emptyState:SetPoint("TOPLEFT", frame.scrollChild, "TOPLEFT", 12, -14)
     frame.emptyState:SetPoint("TOPRIGHT", frame.scrollChild, "TOPRIGHT", -12, -14)
     frame.emptyState:SetJustifyH("LEFT")
@@ -1845,8 +1859,8 @@ function DISCONTENT:CreateWelcomeUI()
     frame.emptyState:SetText("Noch keine News vorhanden. Sobald Einträge erstellt wurden, erscheinen sie hier automatisch.")
 
     frame.openButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.openButton:SetSize(156, 28)
-    frame.openButton:SetPoint("BOTTOM", frame, "BOTTOM", 0, 16)
+    frame.openButton:SetSize(132, 24)
+    frame.openButton:SetPoint("BOTTOM", frame, "BOTTOM", 0, 10)
     frame.openButton:SetText("Addon öffnen")
     frame.openButton:SetScript("OnClick", function()
         DISCONTENT:ShowMainWindow()
@@ -1863,15 +1877,18 @@ function DISCONTENT:ShowWelcomeWindow()
         self:CreateWelcomeUI()
     end
 
-    if self:IsShown() then
-        self:Hide()
-    end
+    self:Hide()
 
     if self.welcomeFrame then
+        self.welcomeFrame:SetParent(UIParent)
+        self.welcomeFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+        self.welcomeFrame:SetFrameLevel(math.max((self.GetFrameLevel and self:GetFrameLevel() or 1) + 200, 500))
         self.welcomeFrame:SetScale(self.uiScaleValue)
         self:RestoreFramePosition(self.welcomeFrame, "welcomeWindowPosition", "CENTER", "CENTER", 0, 60)
         self:RefreshWelcomeNewsView()
         self.welcomeFrame:Show()
+        self.welcomeFrame:Raise()
+        self:Hide()
 
         if self.MarkVisibleNewsAsSeen then
             self:MarkVisibleNewsAsSeen()
@@ -2784,7 +2801,7 @@ function DISCONTENT:CreateUI()
 
     self.guildNewsTabButton = self:CreateTabButton(self, "Gilden-News", "TOPLEFT", self, "TOPLEFT", 16, -42, "guildnews")
     self.overviewTabButton = self:CreateTabButton(self, "Overview", "LEFT", self.guildNewsTabButton, "RIGHT", 8, 0, "overview")
-    self.guildChatTabButton = self:CreateTabButton(self, "Gildenchat", "LEFT", self.overviewTabButton, "RIGHT", 8, 0, "guildchat")
+    self.guildChatTabButton = self:CreateTabButton(self, "Chats", "LEFT", self.overviewTabButton, "RIGHT", 8, 0, "guildchat")
     self.professionsTabButton = self:CreateTabButton(self, "Berufe", "LEFT", self.guildChatTabButton, "RIGHT", 8, 0, "professions")
     self.raidPrepTabButton = self:CreateTabButton(self, "Raid-Prep", "LEFT", self.professionsTabButton, "RIGHT", 8, 0, "raidprep")
     self.mythicPlusTabButton = self:CreateTabButton(self, "Mythic+", "LEFT", self.raidPrepTabButton, "RIGHT", 8, 0, "mythicplus")
@@ -2985,10 +3002,10 @@ DISCONTENT:SetScript("OnEvent", function(self, event, ...)
             end)
         end
 
-        if self.TryShowWelcomeForUnreadNews then
+        if self.ShowWelcomeWindow then
             C_Timer.After(1.8, function()
-                if DISCONTENT and DISCONTENT.TryShowWelcomeForUnreadNews then
-                    DISCONTENT:TryShowWelcomeForUnreadNews()
+                if DISCONTENT and DISCONTENT.ShowWelcomeWindow then
+                    DISCONTENT:ShowWelcomeWindow()
                 end
             end)
         end
